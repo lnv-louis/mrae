@@ -28,3 +28,28 @@ export interface SearchResult {
   similarity: number;
 }
 
+export interface OpenRouterMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }>;
+  // For image generation responses
+  images?: Array<{ image_url: { url: string } }>;
+}
+
+export interface OpenRouterCompletionRequest {
+  model: string;
+  messages: OpenRouterMessage[];
+  temperature?: number;
+  max_tokens?: number;
+  modalities?: string[]; // e.g. ["text", "image"]
+}
+
+export interface OpenRouterCompletionResponse {
+  id: string;
+  choices: Array<{
+    message: OpenRouterMessage;
+    finish_reason: string;
+  }>;
+  created: number;
+  model: string;
+}
+
