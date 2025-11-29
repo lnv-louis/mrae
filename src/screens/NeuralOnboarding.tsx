@@ -21,6 +21,7 @@ const { width, height } = Dimensions.get('window');
 
 interface OnboardingProps {
   onComplete: () => void;
+  skipWelcome?: boolean;
 }
 
 // Pulsing status dot
@@ -143,14 +144,16 @@ const ElegantParticle = ({
   return <Animated.View style={animatedStyle} />;
 };
 
-// Particle colors - vibrant warm tones
+// Particle colors - MORE vibrant warm tones
 const PARTICLE_COLORS = [
-  '#FF6B4A', // Vibrant coral
-  '#FF8A65', // Warm coral
-  '#FFAB91', // Light coral
-  '#FFD4C4', // Soft peach
-  '#FFF0E8', // Cream
-  '#FFE0B2', // Light amber
+  '#FF4500', // Bright orange-red
+  '#FF6347', // Tomato
+  '#FF7F50', // Coral
+  '#FF8C00', // Dark orange
+  '#FFA500', // Orange
+  '#FFB347', // Pastel orange
+  '#FF6B6B', // Light red
+  '#FF8A65', // Deep coral
 ];
 
 
@@ -165,25 +168,25 @@ const ParticleField = ({ progress }: { progress: number }) => {
     });
   }, [progress]);
 
-  // Generate MANY more particles in a flowing pattern
+  // Generate MANY more particles in a flowing pattern - DENSER & LOWER
   const particles = useMemo(() => {
     const particleArray = [];
-    const layers = 8; // Multiple layers for depth
-    const particlesPerLayer = 20;
+    const layers = 12; // More layers for density
+    const particlesPerLayer = 30; // More particles per layer
 
     for (let layer = 0; layer < layers; layer++) {
       const layerRadius = 30 + layer * 20;
-      
+
       for (let i = 0; i < particlesPerLayer; i++) {
         const angle = (i / particlesPerLayer) * Math.PI * 2;
         const x = Math.cos(angle) * layerRadius;
-        const y = Math.sin(angle) * layerRadius * 0.6; // Flatten for perspective
-        
+        const y = Math.sin(angle) * layerRadius * 0.6 - 30; // Flatten for perspective + MOVED HIGHER
+
         particleArray.push({
           id: `${layer}-${i}`,
           x,
           y,
-          size: 1 + Math.random() * 2.5, // Very small particles
+          size: 1.5 + Math.random() * 3, // Slightly larger particles
           delay: Math.random() * 3000,
           duration: 4000 + Math.random() * 3000,
           amplitude: 5 + Math.random() * 15,
@@ -192,13 +195,13 @@ const ParticleField = ({ progress }: { progress: number }) => {
       }
     }
 
-    // Add random floating particles
-    for (let i = 0; i < 40; i++) {
+    // Add random floating particles - MORE DENSE
+    for (let i = 0; i < 80; i++) {
       particleArray.push({
         id: `random-${i}`,
         x: (Math.random() - 0.5) * 250,
-        y: (Math.random() - 0.5) * 250,
-        size: 1 + Math.random() * 2,
+        y: (Math.random() - 0.5) * 200 - 10, // MOVED HIGHER
+        size: 1.5 + Math.random() * 2.5,
         delay: Math.random() * 4000,
         duration: 5000 + Math.random() * 4000,
         amplitude: 3 + Math.random() * 10,
@@ -244,35 +247,37 @@ const ParticleField = ({ progress }: { progress: number }) => {
   );
 };
 
-// Rotating phrases for indexing
+// Rotating phrases for indexing - ALL LOCAL PROCESSING
 const INDEXING_PHRASES = [
-  'Building your visual memory...',
-  'Analyzing image patterns...',
-  'Creating semantic connections...',
-  'MRAE: Your external memory, reimagined',
-  'Mapping visual relationships...',
-  'Learning from your photos...',
-  'Indexing neural pathways...',
-  'Extracting visual features...',
-  'Connecting memories...',
-  'Building the intelligence layer...',
-  'Processing visual data...',
-  'Organizing your gallery...',
-  'Understanding your photos...',
-  'Creating searchable memories...',
-  'Training the AI model...',
-  'Generating embeddings...',
-  'Building the knowledge graph...',
-  'Your photos are being indexed...',
-  'Almost there...',
-  'Finalizing your memory index...',
+  'Building your visual memory... locally on-device',
+  'Analyzing image patterns... all processing stays private',
+  'Creating semantic connections... 100% local',
+  'MRAE: Your external memory, reimagined — privately',
+  'Mapping visual relationships... on your device',
+  'Learning from your photos... locally, no cloud',
+  'Indexing neural pathways... everything stays on-device',
+  'Extracting visual features... private and local',
+  'Connecting memories... all processed locally',
+  'Building the intelligence layer... on-device AI',
+  'Processing visual data... 100% private',
+  'Organizing your gallery... locally on your phone',
+  'Understanding your photos... no data leaves your device',
+  'Creating searchable memories... private and secure',
+  'Running local AI models...',
+  'Generating embeddings... on-device only',
+  'Building the knowledge graph... locally',
+  'Your photos are being indexed... all on-device',
+  'Almost there... privacy-first processing',
+  'Finalizing your memory index... locally',
 ];
 
-export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
-  const [step, setStep] = useState<'welcome' | 'indexing'>('welcome');
+export default function NeuralOnboarding({ onComplete, skipWelcome = false }: OnboardingProps) {
+  const [step, setStep] = useState<'welcome' | 'indexing'>(skipWelcome ? 'indexing' : 'welcome');
   const [indexingStats, setIndexingStats] = useState({ processed: 0, total: 0 });
   const [currentPhoto, setCurrentPhoto] = useState<string>('');
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
+  const [currentStage, setCurrentStage] = useState<string>('');
+  const [stageProgress, setStageProgress] = useState<number>(0);
 
   useEffect(() => {
     if (step === 'indexing') {
@@ -294,16 +299,27 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
   const startRealIndexing = async () => {
     try {
       await indexingService.startIndexing((progress) => {
-        setIndexingStats({
-          processed: progress.processed,
-          total: progress.total,
-        });
-        if (progress.current) {
-          setCurrentPhoto(progress.current);
+        // Update stage information
+        if (progress.stageName) {
+          setCurrentStage(progress.stageName);
         }
-        
-        if (progress.processed >= progress.total && progress.total > 0) {
-          setTimeout(onComplete, 1500);
+        if (progress.stageProgress !== undefined) {
+          setStageProgress(progress.stageProgress);
+        }
+
+        // Update indexing stats (only relevant during indexing stage)
+        if (progress.stage === 'indexing') {
+          setIndexingStats({
+            processed: progress.processed,
+            total: progress.total,
+          });
+          if (progress.current) {
+            setCurrentPhoto(progress.current);
+          }
+
+          if (progress.processed >= progress.total && progress.total > 0) {
+            setTimeout(onComplete, 1500);
+          }
         }
       });
     } catch (error) {
@@ -325,9 +341,12 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
     }
   };
 
-  const progressPercentage = indexingStats.total > 0 
-    ? indexingStats.processed / indexingStats.total 
-    : 0;
+  // Calculate progress percentage based on current stage
+  // If we're in model download stages, use stageProgress
+  // If we're in indexing stage, use photo progress
+  const progressPercentage = indexingStats.total > 0
+    ? indexingStats.processed / indexingStats.total
+    : stageProgress;
   
   const renderContent = () => {
   if (step === 'welcome') {
@@ -335,10 +354,11 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
         <View style={styles.content}>
           <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.titleContainer}>
             <Text style={styles.title}>M R A E</Text>
-            <Image 
-              source={require('../../assets/mrae.png')} 
+            <Image
+              source={require('../../assets/mrae.png')}
               style={styles.titleLogo}
               resizeMode="contain"
+              onError={(error) => console.error('Logo load error:', error)}
             />
           </Animated.View>
           
@@ -359,23 +379,24 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
   }
 
   return (
-      <View style={styles.contentCenter}>
+      <View style={styles.indexingContent}>
         <ParticleField progress={progressPercentage} />
-        
+
         <View style={styles.statsContainer}>
-          <Animated.View 
-            entering={FadeInDown.duration(400).springify()} 
+          <Animated.View
+            entering={FadeInDown.duration(400).springify()}
             style={styles.indexingTitleContainer}
           >
             <Text style={styles.indexingTitle}>M R A E</Text>
-            <Image 
-              source={require('../../assets/mrae.png')} 
+            <Image
+              source={require('../../assets/mrae.png')}
               style={styles.indexingLogo}
               resizeMode="contain"
+              onError={(error) => console.error('Logo load error:', error)}
             />
           </Animated.View>
-          
-          <Animated.View 
+
+          <Animated.View
             style={styles.percentageContainer}
             key={`percentage-${Math.round(progressPercentage * 100)}`}
             entering={FadeInDown.delay(200).duration(400).springify()}
@@ -385,29 +406,21 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
             </Text>
             <Text style={styles.percentageSymbol}>%</Text>
           </Animated.View>
-          
-          <Animated.Text 
+
+          <Animated.Text
             entering={FadeInDown.delay(100).duration(500)}
             style={styles.rotatingPhrase}
             key={currentPhraseIndex}
           >
             {INDEXING_PHRASES[currentPhraseIndex]}
           </Animated.Text>
-          
-          {indexingStats.total > 0 && (
-            <View style={styles.statusBadge}>
-              <PulsingDot />
-              <Text style={styles.statusText}>
-                {progressPercentage < 0.3 
-                  ? 'Analyzing images...' 
-                  : progressPercentage < 0.7 
-                  ? 'Building connections...' 
-                  : progressPercentage < 1 
-                  ? 'Finalizing index...' 
-                  : 'Complete! ✨'}
-              </Text>
-            </View>
-          )}
+
+          <View style={styles.statusBadge}>
+            <PulsingDot />
+            <Text style={styles.statusText}>
+              {currentStage || 'Processing...'}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -435,10 +448,10 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     justifyContent: 'center',
   },
-  contentCenter: {
+  indexingContent: {
     flex: 1,
+    padding: spacing.xl,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   spacer: {
     height: spacing.xxl,
@@ -571,16 +584,12 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     alignItems: 'flex-start',
-    justifyContent: 'center',
-    paddingLeft: spacing.xl,
-    width: '100%',
-    flex: 1,
+    justifyContent: 'flex-start',
   },
   percentageContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     marginBottom: spacing.m,
-    paddingLeft: spacing.xl,
   },
   percentageNumber: {
     fontSize: 72,
@@ -598,29 +607,21 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.l,
-    paddingHorizontal: spacing.l,
-    paddingVertical: spacing.m,
-    backgroundColor: colors.warm.tertiary,
-    borderRadius: radius.l,
+    alignSelf: 'flex-start',
+    marginTop: spacing.m,
     gap: spacing.s,
   },
   pulsingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.warm.accent,
-    shadowColor: colors.warm.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 3,
   },
   statusText: {
     fontSize: 13,
-    color: colors.warm.accent,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    color: colors.text.secondary,
+    fontWeight: '400',
+    fontStyle: 'italic',
   },
   indexingTitleContainer: {
     flexDirection: 'row',
@@ -628,8 +629,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     gap: spacing.m,
     marginBottom: spacing.l,
-    alignSelf: 'flex-start',
-    paddingLeft: spacing.xl,
   },
   indexingTitle: {
     fontSize: 28,
@@ -648,6 +647,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.m,
     fontStyle: 'italic',
     minHeight: 24,
-    paddingLeft: spacing.xl,
   },
 });

@@ -1,0 +1,45 @@
+# Node modules (EAS installs these on the build server)
+node_modules/
+
+# Build artifacts
+.expo/
+.expo-shared/
+dist/
+build/
+
+# Development files
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Android local config (contains machine-specific SDK paths)
+android/local.properties
+local.properties
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+*~
+.Spotlight-V100
+.Trashes
+
+# Testing
+coverage/
+.nyc_output/
+
+# Large model files (these should be in assets, not root)
+*.onnx
+*.bin
+tokenizer.json
+
+# Git
+.git/
+.gitignore
+
+# Misc
+*.orig
+.watchmanconfig

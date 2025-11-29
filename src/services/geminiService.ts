@@ -2,15 +2,24 @@ import { GeminiContent, GeminiGenerateResponse, GeminiPart } from '../types';
 import geoService from './geoService';
 import Constants from 'expo-constants';
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
+const DEFAULT_MODEL = 'google/gemini-2.5-flash-preview-09-2025';
+const IMAGE_MODEL = 'google/gemini-3-pro-image-preview';
 
+/**
+ * AI Service - Uses OpenRouter API for AI capabilities
+ * OpenRouter provides access to multiple AI models through a unified API
+ *
+ * Models:
+ * - LLM: google/gemini-2.5-flash-preview-09-2025
+ * - Image/Vision: google/gemini-3-pro-image-preview
+ */
 class GeminiService {
   private apiKey: string | null = null;
 
   constructor() {
-    const extraKey = (Constants?.expoConfig?.extra as any)?.geminiApiKey;
-    this.apiKey = process.env.GEMINI_API_KEY || extraKey || null;
+    const extraKey = (Constants?.expoConfig?.extra as any)?.openrouterApiKey;
+    this.apiKey = process.env.OPENROUTER_API_KEY || extraKey || null;
   }
 
   setApiKey(key: string) {
@@ -19,6 +28,14 @@ class GeminiService {
 
   hasApiKey(): boolean {
     return !!this.apiKey;
+  }
+
+  getImageModel(): string {
+    return IMAGE_MODEL;
+  }
+
+  getDefaultModel(): string {
+    return DEFAULT_MODEL;
   }
 
   private transformMessages(messages: Array<{ role: 'user' | 'assistant' | 'system'; content: any }>): GeminiContent[] {
@@ -48,28 +65,55 @@ class GeminiService {
 
   async generateContent(messages: Array<{ role: 'user' | 'assistant' | 'system'; content: any }>, model: string = DEFAULT_MODEL): Promise<GeminiGenerateResponse | null> {
     if (!this.apiKey) {
+      console.error('❌ OpenRouter API key not configured');
       return null;
     }
     try {
       const cities = await geoService.getVisitedCities(50);
       const contextPrefix = cities && cities.length > 0 ? [{ role: 'user' as const, content: `User visited cities: ${cities.join(', ')}.` }] : [];
       const augmented = contextPrefix.length ? [...contextPrefix, ...messages] : messages;
-      const url = `${GEMINI_API_BASE}/${model}:generateContent`;
-      const contents = this.transformMessages(augmented);
+
+      // OpenRouter uses OpenAI-compatible format
+      const url = `${OPENROUTER_API_BASE}/chat/completions`;
+      const openAIMessages = augmented.map(m => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+      }));
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': this.apiKey,
+          'Authorization': `Bearer ${this.apiKey}`,
+          'HTTP-Referer': 'https://mrae.app',
+          'X-Title': 'MRAE',
         },
-        body: JSON.stringify({ contents }),
+        body: JSON.stringify({
+          model,
+          messages: openAIMessages
+        }),
       });
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ OpenRouter API error:', response.status, errorText);
         return null;
       }
-      const data: GeminiGenerateResponse = await response.json();
-      return data;
-    } catch {
+
+      const data = await response.json();
+      // Convert OpenAI format to internal format
+      return {
+        candidates: [{
+          content: {
+            parts: [{ text: data.choices[0].message.content }],
+            role: 'model'
+          },
+          finishReason: 'STOP',
+          index: 0
+        }]
+      } as GeminiGenerateResponse;
+    } catch (error) {
+      console.error('❌ Error calling OpenRouter API:', error);
       return null;
     }
   }
@@ -84,25 +128,13 @@ class GeminiService {
     };
   }
 
-  async embedText(text: string, model: string = 'text-embedding-004'): Promise<number[] | null> {
-    if (!this.apiKey) return null;
-    try {
-      const url = `${GEMINI_API_BASE}/${model}:embedText`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': this.apiKey,
-        },
-        body: JSON.stringify({ text }),
-      });
-      if (!response.ok) return null;
-      const data: import('../types').GeminiEmbeddingResponse = await response.json();
-      const values = data?.embedding?.values || [];
-      return values.length > 0 ? values : null;
-    } catch {
-      return null;
-    }
+  /**
+   * Embedding functionality is not available through OpenRouter
+   * Use the local ONNX models instead (handled by embeddingService)
+   */
+  async embedText(text: string): Promise<number[] | null> {
+    console.warn('⚠️ Text embedding not available via OpenRouter. Use local ONNX models instead.');
+    return null;
   }
 }
 

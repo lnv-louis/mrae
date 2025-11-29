@@ -24,6 +24,7 @@ import { CleanupMode } from '../components/CleanupMode';
 import photoService from '../services/photoService';
 import userPreferenceService from '../services/userPreferenceService';
 import categorizationService from '../services/categorizationService';
+import databaseService from '../services/databaseService';
 import storageService from '../utils/storage';
 import { PhotoMetadata } from '../types';
 import ScreenLayout from '../components/ScreenLayout';
@@ -35,15 +36,13 @@ const COLUMN_COUNT = 2;
 const ITEM_SIZE = (width - spacing.l * 2 - spacing.m) / COLUMN_COUNT;
 
 export default function GalleryScreen({ navigation }: any) {
-  const [viewMode, setViewMode] = useState<'all' | 'folders' | 'categories'>('all');
-  
+  const [viewMode, setViewMode] = useState<'all' | 'categories'>('all');
+
   // Data
   const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
-  const [albums, setAlbums] = useState<MediaLibrary.Album[]>([]);
   const [categories, setCategories] = useState<{ label: string; count: number }[]>([]);
-  
+
   // Selection state for drill-down
-  const [selectedAlbum, setSelectedAlbum] = useState<MediaLibrary.Album | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [filteredPhotos, setFilteredPhotos] = useState<PhotoMetadata[]>([]);
 
@@ -52,33 +51,7 @@ export default function GalleryScreen({ navigation }: any) {
   const [isCleanupMode, setIsCleanupMode] = useState(false);
   const [username, setUsername] = useState('USER');
 
-  useEffect(() => {
-    checkPermissionsAndLoad();
-    loadUsername();
-    
-    const unsubscribe = navigation.addListener('focus', () => {
-      if (viewMode === 'all') loadPhotos();
-    });
-    return unsubscribe;
-  }, [navigation, checkPermissionsAndLoad, loadUsername, loadPhotos, viewMode]);
-
-  useEffect(() => {
-    if (viewMode === 'folders') loadAlbums();
-    // Categories are loaded via manual action or pre-loaded if we had them stored
-  }, [viewMode, loadAlbums]);
-
-  useEffect(() => {
-    if (selectedAlbum) {
-      loadAlbumPhotos(selectedAlbum);
-    } else if (selectedCategory) {
-      // Mock filtering for category since we don't have backend query yet
-      // in a real app this would query DB
-      setFilteredPhotos(photos); // Placeholder
-    } else {
-      setFilteredPhotos(photos);
-    }
-  }, [selectedAlbum, selectedCategory, photos, loadAlbumPhotos]);
-
+  // Callback functions
   const loadUsername = useCallback(async () => {
     try {
       const stored = await storageService.get('username');
@@ -92,7 +65,11 @@ export default function GalleryScreen({ navigation }: any) {
     try {
       setLoading(true);
       const fetched = await photoService.getAllPhotos();
-      setPhotos(fetched);
+      // Sort by date (newest first)
+      const sorted = [...fetched].sort((a, b) => {
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+      setPhotos(sorted);
     } catch (e) {
       console.error(e);
     } finally {
@@ -109,11 +86,11 @@ export default function GalleryScreen({ navigation }: any) {
     loadPhotos();
   }, [loadPhotos]);
 
-  const loadAlbums = useCallback(async () => {
+  const loadCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const fetched = await photoService.getAlbums();
-      setAlbums(fetched);
+      const labels = await databaseService.getAllLabels();
+      setCategories(labels);
     } catch (e) {
       console.error(e);
     } finally {
@@ -121,11 +98,14 @@ export default function GalleryScreen({ navigation }: any) {
     }
   }, []);
 
-  const loadAlbumPhotos = useCallback(async (album: MediaLibrary.Album) => {
+  const loadCategoryPhotos = useCallback(async (category: string) => {
     try {
       setLoading(true);
-      const fetched = await photoService.getPhotosInAlbum(album);
-      setFilteredPhotos(fetched);
+      const photoIds = await databaseService.getPhotosByLabel(category);
+      // Get full photo metadata for each photo ID
+      const allPhotos = await photoService.getAllPhotos();
+      const categorizedPhotos = allPhotos.filter(p => photoIds.includes(p.id));
+      setFilteredPhotos(categorizedPhotos);
     } catch (e) {
       console.error(e);
     } finally {
@@ -136,9 +116,9 @@ export default function GalleryScreen({ navigation }: any) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (viewMode === 'all') await loadPhotos();
-    if (viewMode === 'folders') await loadAlbums();
+    if (viewMode === 'categories') await loadCategories();
     setRefreshing(false);
-  }, [viewMode, loadPhotos, loadAlbums]);
+  }, [viewMode, loadPhotos, loadCategories]);
 
   const handlePhotoPress = useCallback((photo: PhotoMetadata) => {
     navigation.navigate('PhotoDetail', { photoId: photo.id, uri: photo.uri });
@@ -153,11 +133,13 @@ export default function GalleryScreen({ navigation }: any) {
         setLoading(true);
         try {
           const res = await categorizationService.categorizeAllImagesFromPrompt(text);
-          setCategories(res.counts.map(c => ({ label: c.label, count: c.count })));
+          // Reload categories from database to get all labels
+          await loadCategories();
           setViewMode('categories');
           Alert.alert('Success', res.message);
-        } catch {
-          Alert.alert('Error', 'Failed to categorize');
+        } catch (error: any) {
+          console.error('Categorization error:', error);
+          Alert.alert('Error', error?.message || 'Failed to categorize');
         } finally {
           setLoading(false);
         }
@@ -165,68 +147,133 @@ export default function GalleryScreen({ navigation }: any) {
     );
   };
 
+  // Effects
+  useEffect(() => {
+    checkPermissionsAndLoad();
+    loadUsername();
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (viewMode === 'all') loadPhotos();
+      if (viewMode === 'categories') loadCategories();
+    });
+    return unsubscribe;
+  }, [navigation, checkPermissionsAndLoad, loadUsername, loadPhotos, loadCategories, viewMode]);
+
+  useEffect(() => {
+    if (viewMode === 'categories') loadCategories();
+    if (viewMode === 'all') loadPhotos();
+  }, [viewMode, loadCategories, loadPhotos]);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      loadCategoryPhotos(selectedCategory);
+    } else {
+      setFilteredPhotos(photos);
+    }
+  }, [selectedCategory, photos, loadCategoryPhotos]);
+
   // --- Render Helpers ---
 
   const renderSegmentControl = () => (
-    <View style={styles.segmentContainer}>
-      {(['all', 'folders', 'categories'] as const).map((mode) => (
-        <TouchableOpacity
-          key={mode}
-          style={[styles.segmentButton, viewMode === mode && styles.segmentButtonActive]}
-          onPress={() => {
-            setViewMode(mode);
-            setSelectedAlbum(null);
-            setSelectedCategory(null);
-          }}
-        >
-          <Text style={[styles.segmentText, viewMode === mode && styles.segmentTextActive]}>
-            {mode.charAt(0).toUpperCase() + mode.slice(1)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+    <>
+      <View style={styles.segmentContainer}>
+        {(['all', 'categories'] as const).map((mode) => {
+          const isActive = viewMode === mode;
+          const isPrimaryHero = mode === 'categories'; // Categories is THE hero feature
+          const isSecondary = mode === 'all';
 
-  const renderAlbums = () => (
-    <View style={styles.gridContainer}>
-      {albums.map((album) => (
-        <TouchableOpacity 
-          key={album.id} 
-          style={styles.folderCard}
-          onPress={() => setSelectedAlbum(album)}
-        >
-          <View style={styles.folderIcon}>
-            <Ionicons name="folder" size={40} color={colors.warm.accent} />
-          </View>
-          <Text style={styles.folderTitle} numberOfLines={1}>{album.title}</Text>
-          <Text style={styles.folderCount}>{album.assetCount} items</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
+          return (
+            <TouchableOpacity
+              key={mode}
+              style={[
+                styles.segmentButton,
+                isActive && styles.segmentButtonActive,
+                isPrimaryHero && styles.segmentButtonHero,
+                isActive && isPrimaryHero && styles.segmentButtonActiveHero,
+                isSecondary && styles.segmentButtonSecondary,
+                isActive && isSecondary && styles.segmentButtonActiveSecondary,
+              ]}
+              onPress={() => {
+                setViewMode(mode);
+                setSelectedCategory(null);
+              }}
+            >
+              <Text style={[
+                styles.segmentText,
+                isActive && styles.segmentTextActive,
+                isPrimaryHero && styles.segmentTextHero,
+                isActive && isPrimaryHero && styles.segmentTextActiveHero,
+                isSecondary && styles.segmentTextSecondary,
+                isActive && isSecondary && styles.segmentTextActiveSecondary,
+              ]}>
+                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </Text>
+              {isPrimaryHero && (
+                <View style={styles.aiIndicator}>
+                  <Ionicons name="sparkles" size={10} color={isActive ? colors.neutral.white : colors.warm.accent} />
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {viewMode === 'categories' && (
+        <Text style={styles.categorySubtitle}>
+          AI-powered smart categories based on mood, color, and aesthetics
+        </Text>
+      )}
+    </>
   );
 
   const renderCategories = () => (
     <View style={styles.gridContainer}>
       {categories.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No categories yet.</Text>
+          <Ionicons name="sparkles-outline" size={48} color={colors.warm.accent} style={{ marginBottom: spacing.m }} />
+          <Text style={styles.emptyTitle}>AI Smart Categories</Text>
+          <Text style={styles.emptyText}>
+            Discover your photos organized by mood, color, and aesthetics
+          </Text>
           <TouchableOpacity style={styles.createButton} onPress={handleCategorize}>
+            <Ionicons name="sparkles" size={16} color="#fff" style={{ marginRight: 6 }} />
             <Text style={styles.createButtonText}>Create Categories</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        categories.map((cat) => (
-          <TouchableOpacity 
-            key={cat.label} 
-            style={styles.categoryCard}
-            onPress={() => setSelectedCategory(cat.label)}
-          >
-            <BlurView intensity={20} style={styles.categoryBlur}>
-              <Text style={styles.categoryTitle}>{cat.label}</Text>
-              <Text style={styles.categoryCount}>{cat.count}</Text>
-            </BlurView>
-          </TouchableOpacity>
-        ))
+        categories.map((cat, index) => {
+          // Cycle through warm gradient colors for visual variety
+          const gradientColors = [
+            ['#FF6B4A', '#FF8C6B'],  // Warm orange
+            ['#FFB199', '#FFCBB0'],  // Soft peach
+            ['#FF9E7A', '#FFBFA0'],  // Light coral
+            ['#E8765C', '#FF9980'],  // Deep salmon
+          ];
+          const gradient = gradientColors[index % gradientColors.length];
+
+          return (
+            <TouchableOpacity
+              key={cat.label}
+              style={[
+                styles.categoryCard,
+                {
+                  backgroundColor: gradient[0],
+                  shadowColor: gradient[0],
+                }
+              ]}
+              onPress={() => setSelectedCategory(cat.label)}
+            >
+              <BlurView intensity={30} tint="light" style={styles.categoryBlur}>
+                <View style={styles.categoryContent}>
+                  <Ionicons name="images" size={24} color={colors.neutral.white} style={{ opacity: 0.9 }} />
+                  <Text style={styles.categoryTitle}>{cat.label}</Text>
+                  <View style={styles.categoryBadge}>
+                    <Text style={styles.categoryCount}>{cat.count} photos</Text>
+                  </View>
+                </View>
+              </BlurView>
+            </TouchableOpacity>
+          );
+        })
       )}
     </View>
   );
@@ -243,8 +290,8 @@ export default function GalleryScreen({ navigation }: any) {
     );
   }
 
-  const isDrillDown = !!selectedAlbum || !!selectedCategory;
-  const drillDownTitle = selectedAlbum?.title || selectedCategory;
+  const isDrillDown = !!selectedCategory;
+  const drillDownTitle = selectedCategory;
 
   return (
     <ScreenLayout>
@@ -256,7 +303,7 @@ export default function GalleryScreen({ navigation }: any) {
           </>
         ) : (
           <View style={styles.drillDownHeader}>
-            <TouchableOpacity onPress={() => { setSelectedAlbum(null); setSelectedCategory(null); }}>
+            <TouchableOpacity onPress={() => { setSelectedCategory(null); }}>
               <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
             </TouchableOpacity>
             <Text style={styles.drillDownTitle}>{drillDownTitle}</Text>
@@ -291,7 +338,6 @@ export default function GalleryScreen({ navigation }: any) {
             <PhotoGrid photos={photos} onPhotoPress={handlePhotoPress} />
               )
             )}
-            {viewMode === 'folders' && renderAlbums()}
             {viewMode === 'categories' && renderCategories()}
           </>
           )}
@@ -307,10 +353,10 @@ export default function GalleryScreen({ navigation }: any) {
       >
         <StatusBar hidden={true} />
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <CleanupMode 
+          <CleanupMode
             photos={photos}
-            onKeep={async (p) => await userPreferenceService.markPreference(p.id, 'Like')}
-            onDelete={(p) => {
+            onKeep={async (photo) => await userPreferenceService.markPreference(photo.id, 'Like')}
+            onDelete={() => {
               // Queue for deletion, don't delete immediately - handled in CleanupMode
             }}
             onFinish={(photosToDelete) => {
@@ -358,7 +404,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.header - 20,
     paddingHorizontal: spacing.l,
     paddingBottom: spacing.m,
-    backgroundColor: 'rgba(255, 138, 101, 0.1)',
+    backgroundColor: colors.background.secondary,
   },
   headerTitle: {
     ...typography.header.l,
@@ -397,27 +443,97 @@ const styles = StyleSheet.create({
     borderRadius: radius.l,
     padding: 4,
     shadowColor: colors.warm.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   segmentButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.m,
+    position: 'relative',
+  },
+  // Categories is THE hero feature - most prominent
+  segmentButtonHero: {
+    borderWidth: 1.5,
+    borderColor: colors.warm.accent,
+  },
+  segmentButtonActiveHero: {
+    backgroundColor: colors.warm.accent,
+    shadowColor: colors.warm.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+    transform: [{ scale: 1.02 }],
+  },
+  // All is secondary importance
+  segmentButtonSecondary: {
+    borderWidth: 0.5,
+    borderColor: colors.warm.tertiary,
   },
   segmentButtonActive: {
     backgroundColor: colors.warm.tertiary,
+  },
+  segmentButtonActiveSecondary: {
+    backgroundColor: colors.warm.tertiary,
+    shadowColor: colors.warm.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   segmentText: {
     color: colors.text.tertiary,
     fontSize: 13,
     fontWeight: '600',
   },
+  // Hero text styling (Categories)
+  segmentTextHero: {
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  segmentTextActiveHero: {
+    color: colors.neutral.white,
+    fontWeight: '800',
+  },
+  // Secondary text styling (All)
+  segmentTextSecondary: {
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   segmentTextActive: {
     color: colors.warm.accent,
+  },
+  segmentTextActiveSecondary: {
+    color: colors.neutral.white,
+    fontWeight: '700',
+  },
+  aiIndicator: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categorySubtitle: {
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: spacing.s,
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   scrollContent: {
     paddingBottom: 100,
@@ -428,82 +544,92 @@ const styles = StyleSheet.create({
     padding: spacing.m,
     gap: spacing.m,
   },
-  folderCard: {
-    width: ITEM_SIZE,
-    aspectRatio: 1,
-    backgroundColor: colors.neutral.white,
-    borderRadius: radius.m,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.m,
-    shadowColor: colors.warm.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  folderIcon: {
-    marginBottom: spacing.s,
-  },
-  folderTitle: {
-    color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  folderCount: {
-    color: colors.text.tertiary,
-    fontSize: 12,
-    marginTop: 4,
-  },
   categoryCard: {
     width: ITEM_SIZE,
-    aspectRatio: 1.5,
-    borderRadius: radius.m,
+    aspectRatio: 1.2,
+    borderRadius: radius.l,
     overflow: 'hidden',
     backgroundColor: colors.warm.secondary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   categoryBlur: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: spacing.m,
+  },
+  categoryContent: {
+    alignItems: 'center',
+    gap: spacing.s,
   },
   categoryTitle: {
-    color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
-    textShadowColor: 'rgba(255,255,255,0.8)',
-    textShadowRadius: 4,
+    color: colors.neutral.white,
+    fontSize: 17,
+    fontWeight: '700',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    letterSpacing: 0.5,
+  },
+  categoryBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4,
   },
   categoryCount: {
-    color: colors.text.secondary,
-    fontSize: 12,
+    color: colors.neutral.white,
+    fontSize: 11,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   emptyContainer: {
     width: '100%',
     padding: spacing.xl,
+    paddingTop: spacing.xxl * 2,
     alignItems: 'center',
   },
+  emptyTitle: {
+    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: spacing.s,
+    letterSpacing: 0.5,
+  },
   emptyText: {
-    color: colors.text.tertiary,
-    fontSize: 16,
-    marginBottom: spacing.m,
+    color: colors.text.secondary,
+    fontSize: 15,
+    marginBottom: spacing.xl,
     textAlign: 'center',
+    lineHeight: 22,
   },
   createButton: {
     backgroundColor: colors.warm.accent,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: radius.l,
-    shadowColor: colors.warm.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: colors.warm.accent,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   createButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: colors.neutral.white,
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.3,
   },
   fullscreenModal: {
     flex: 1,

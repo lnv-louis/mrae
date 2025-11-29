@@ -25,16 +25,20 @@ import { colors, spacing, radius } from '../theme';
 
 const { width } = Dimensions.get('window');
 
-// Suggested search queries
+// Suggested search queries - More inspiring and diverse
 const SUGGESTED_QUERIES = [
-  'sunset beach',
-  'family gathering',
-  'food photography',
-  'nature landscapes',
-  'city architecture',
-  'pets playing',
-  'travel memories',
-  'celebration moments',
+  'golden hour moments with warm light',
+  'candid laughter and genuine smiles',
+  'peaceful nature scenes that feel serene',
+  'urban architecture with interesting geometry',
+  'food that looks delicious and colorful',
+  'adventurous travel memories',
+  'cozy indoor moments with soft lighting',
+  'vibrant celebrations full of energy',
+  'quiet contemplative moments alone',
+  'dynamic action shots with movement',
+  'nostalgic vintage vibes',
+  'minimalist compositions with negative space',
 ];
 
 export default function ExploreScreen({ navigation }: any) {
@@ -44,6 +48,7 @@ export default function ExploreScreen({ navigation }: any) {
   const [transcript, setTranscript] = useState('');
   const [message, setMessage] = useState('');
   const [searching, setSearching] = useState(false);
+  const [searchProgress, setSearchProgress] = useState<string>('');
   const [hasSearched, setHasSearched] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -107,22 +112,31 @@ export default function ExploreScreen({ navigation }: any) {
     try {
       setSearching(true);
       setHasSearched(true);
+      setSearchProgress('Processing your query...');
       await saveRecentSearch(query.trim());
-      
+
+      setSearchProgress('Generating text embeddings...');
+      await new Promise(resolve => setTimeout(resolve, 300)); // Small delay for UI
+
+      setSearchProgress('Searching through your photos...');
       const res = await querySearchService.searchByExpandedText(query.trim());
-      const photos = res.results.map((r) => ({ 
-        id: r.id, 
-        uri: r.uri, 
-        createdAt: r.timestamp 
+
+      setSearchProgress('Ranking results...');
+      const photos = res.results.map((r) => ({
+        id: r.id,
+        uri: r.uri,
+        createdAt: r.timestamp
       } as PhotoMetadata));
-      
+
       setResultsPhotos(photos);
       setPhrases(res.phrases);
       setMessage(res.message);
       setTranscript('');
+      setSearchProgress('');
     } catch (error) {
       console.error('Error searching:', error);
       Alert.alert('Error', 'Failed to search photos');
+      setSearchProgress('');
     } finally {
       setSearching(false);
     }
@@ -184,31 +198,40 @@ export default function ExploreScreen({ navigation }: any) {
       // Transcribe audio using STT
       setSearching(true);
       setHasSearched(true);
-      
+      setSearchProgress('Transcribing audio...');
+
       const transcription = await transcriptionService.transcribe(uri);
       const transcribedText = transcription.response || '';
-      
+
       if (!transcribedText.trim()) {
         Alert.alert('Error', 'Could not transcribe audio. Please try again.');
         setSearching(false);
+        setSearchProgress('');
         return;
       }
 
       // Use transcribed text for search
       setQuery(transcribedText);
       await saveRecentSearch(transcribedText);
-      
+
+      setSearchProgress('Generating embeddings...');
+      await new Promise(resolve => setTimeout(resolve, 300)); // Small delay for UI
+
+      setSearchProgress('Searching photos...');
       const res = await speechQueryService.searchByAudio(uri);
-      const photos = res.results.map((r) => ({ 
-        id: r.id, 
-        uri: r.uri, 
-        createdAt: r.timestamp 
+
+      setSearchProgress('Ranking results...');
+      const photos = res.results.map((r) => ({
+        id: r.id,
+        uri: r.uri,
+        createdAt: r.timestamp
       } as PhotoMetadata));
-      
+
       setResultsPhotos(photos);
       setPhrases(res.phrases);
       setTranscript(res.transcript);
       setMessage(res.message);
+      setSearchProgress('');
       
       // Cleanup
       setRecording(null);
@@ -261,28 +284,41 @@ export default function ExploreScreen({ navigation }: any) {
 
   return (
     <ScreenLayout>
+      {/* Compact Header */}
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Explore</Text>
-        <Text style={styles.headerSubtitle}>Semantic Photo Finding</Text>
       </View>
 
-      {/* ChatGPT-style Search Bar */}
-      <View style={styles.searchWrapper}>
-        <BlurView intensity={30} tint="light" style={styles.searchBar}>
-          <Ionicons 
-            name="search-outline" 
-            size={20} 
-            color={colors.text.tertiary} 
-            style={styles.searchIcon}
-          />
+      {/* Prominent Dual-Input Design */}
+      <View style={styles.inputContainer}>
+        {/* Large Voice Button */}
+        <TouchableOpacity
+          style={[styles.voiceButton, isRecording && styles.voiceButtonRecording]}
+          onPress={handleAudioPress}
+          disabled={searching}
+        >
+          {isRecording ? (
+            <View style={styles.voiceButtonContent}>
+              <View style={styles.recordingPulseIcon} />
+              <Text style={styles.voiceButtonText}>Stop</Text>
+            </View>
+          ) : (
+            <View style={styles.voiceButtonContent}>
+              <Ionicons name="mic" size={28} color="#fff" />
+              <Text style={styles.voiceButtonText}>Voice</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Text Input */}
+        <View style={styles.textInputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Search moods, contexts..."
+            placeholder="or describe with text..."
             placeholderTextColor={colors.text.tertiary}
             value={query}
             onChangeText={(text) => {
               setQuery(text);
-              // Reset search state when query is cleared
               if (!text.trim() && hasSearched) {
                 setHasSearched(false);
                 setResultsPhotos([]);
@@ -294,12 +330,14 @@ export default function ExploreScreen({ navigation }: any) {
             onSubmitEditing={handleSearch}
             returnKeyType="search"
             editable={!searching && !isRecording}
+            multiline
+            numberOfLines={2}
+            textAlignVertical="top"
           />
           {query.length > 0 && !searching && (
             <TouchableOpacity
               onPress={() => {
                 setQuery('');
-                // Reset search state when clearing query
                 setHasSearched(false);
                 setResultsPhotos([]);
                 setPhrases([]);
@@ -308,47 +346,34 @@ export default function ExploreScreen({ navigation }: any) {
               }}
               style={styles.clearButton}
             >
-              <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />
+              <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            style={[styles.iconButton, isRecording && styles.recordingButton]}
-            onPress={handleAudioPress}
-            disabled={searching}
-          >
-            {isRecording ? (
-              <View style={styles.recordingIndicator} />
-            ) : searching ? (
-              <ActivityIndicator size="small" color={colors.warm.accent} />
-            ) : (
-              <Ionicons name="mic" size={20} color={colors.warm.accent} />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconButton, styles.sendButton]}
+            style={styles.searchButton}
             onPress={handleSearch}
             disabled={searching || !query.trim() || isRecording}
           >
             {searching ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Ionicons name="arrow-forward" size={20} color="#fff" />
+              <Ionicons name="search" size={20} color="#fff" />
             )}
           </TouchableOpacity>
-        </BlurView>
+        </View>
       </View>
 
       {isRecording && (
         <View style={styles.recordingBanner}>
           <View style={styles.recordingPulse} />
-          <Text style={styles.recordingText}>Recording... Tap mic to stop</Text>
+          <Text style={styles.recordingText}>Listening...</Text>
         </View>
       )}
 
       {searching && !isRecording && (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.warm.accent} />
-          <Text style={styles.loadingText}>Searching...</Text>
+          <Text style={styles.loadingText}>{searchProgress || 'Searching...'}</Text>
         </View>
       )}
 
@@ -402,26 +427,25 @@ export default function ExploreScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={styles.suggestionsContent}>
           {recentSearches.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recent Searches</Text>
+              <Text style={styles.sectionTitle}>Recent</Text>
               <View style={styles.chipsContainer}>
-                {recentSearches.map((search, index) => (
+                {recentSearches.slice(0, 3).map((search, index) => (
                   <TouchableOpacity
                     key={`recent-${index}`}
                     style={styles.chip}
                     onPress={() => handleRecentSearchPress(search)}
                   >
-                    <Ionicons name="time-outline" size={14} color={colors.warm.accent} />
                     <Text style={styles.chipText}>{search}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
           )}
-          
+
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Suggestions</Text>
+            <Text style={styles.sectionTitle}>Try</Text>
             <View style={styles.chipsContainer}>
-              {suggestedQueriesDisplay.map((suggestion, index) => (
+              {suggestedQueriesDisplay.slice(0, 6).map((suggestion, index) => (
                 <TouchableOpacity
                   key={`suggestion-${index}`}
                   style={styles.chip}
@@ -434,10 +458,9 @@ export default function ExploreScreen({ navigation }: any) {
           </View>
 
           <View style={styles.infoSection}>
-            <Ionicons name="sparkles-outline" size={24} color={colors.warm.accent} />
-            <Text style={styles.infoTitle}>Semantic Search</Text>
+            <Ionicons name="sparkles-outline" size={20} color={colors.warm.accent} style={{ marginBottom: 6 }} />
             <Text style={styles.infoText}>
-              Find photos by describing what you remember: moods, objects, scenes, or feelings.
+              Describe the mood, colors, or story — our AI understands context, not just keywords.
             </Text>
           </View>
         </ScrollView>
@@ -455,72 +478,90 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.l,
   },
   headerContainer: {
-    marginTop: 40,
+    marginTop: 30,
     paddingHorizontal: spacing.l,
     marginBottom: spacing.m,
   },
   headerTitle: {
-    fontSize: 34,
+    fontSize: 28,
     fontWeight: '300',
     color: colors.text.primary,
     letterSpacing: 2,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    marginTop: 5,
-  },
-  searchWrapper: {
+  inputContainer: {
+    flexDirection: 'row',
     paddingHorizontal: spacing.l,
     marginBottom: spacing.m,
+    gap: spacing.m,
+    alignItems: 'stretch',
   },
-  searchBar: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.m,
-    paddingVertical: spacing.s,
+  voiceButton: {
+    width: 100,
+    backgroundColor: colors.warm.accent,
     borderRadius: radius.xl,
-    overflow: 'hidden',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: spacing.l,
+    shadowColor: colors.warm.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  voiceButtonRecording: {
+    backgroundColor: colors.semantic.error,
+  },
+  voiceButtonContent: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  voiceButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  recordingPulseIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+  },
+  textInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
     backgroundColor: colors.neutral.white,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.m,
+    alignItems: 'center',
     shadowColor: colors.warm.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    minHeight: 48,
-  },
-  searchIcon: {
-    marginRight: spacing.s,
   },
   input: {
     flex: 1,
     color: colors.text.primary,
-    fontSize: 16,
-    paddingVertical: spacing.xs,
+    fontSize: 15,
+    paddingVertical: 0,
+    minHeight: 44,
+    maxHeight: 80,
+    lineHeight: 20,
   },
   clearButton: {
     padding: spacing.xs,
     marginRight: spacing.xs,
   },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  searchButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.warm.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: spacing.xs,
-  },
-  sendButton: {
-    backgroundColor: colors.warm.accent,
-  },
-  recordingButton: {
-    backgroundColor: colors.semantic.error,
-  },
-  recordingIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#fff',
   },
   recordingBanner: {
     flexDirection: 'row',
@@ -635,63 +676,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.l,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing.m,
+    color: colors.text.secondary,
+    marginBottom: spacing.s,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   chipsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.s,
+    gap: spacing.xs,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.neutral.white,
     paddingHorizontal: spacing.m,
-    paddingVertical: spacing.s,
+    paddingVertical: spacing.xs,
     borderRadius: radius.l,
     borderWidth: 1,
-    borderColor: colors.warm.tertiary,
-    gap: spacing.xs,
-    shadowColor: colors.warm.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: colors.neutral.gray300,
   },
   chipText: {
     color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '400',
   },
   infoSection: {
     alignItems: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.neutral.white,
-    borderRadius: radius.xl,
-    marginTop: spacing.l,
-    shadowColor: colors.warm.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text.primary,
+    paddingVertical: spacing.l,
+    paddingHorizontal: spacing.m,
     marginTop: spacing.m,
-    marginBottom: spacing.s,
   },
   infoText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
+    fontStyle: 'italic',
   },
 });

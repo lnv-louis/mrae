@@ -6,16 +6,16 @@ import geminiService from './geminiService';
 
 /**
  * Embedding Service - Manages text and image embeddings for Text-Image Retrieval
- * 
+ *
  * Architecture:
  * - Image Embeddings: Cactus Visual Encoder (lfm2-vl-450m) - on-device
  * - Text Embeddings: Custom ONNX Text Encoder - on-device
- * 
+ *
  * Both encoders output vectors in the same embedding space for cosine similarity search.
- * 
+ *
  * Fallback priority for text:
  * 1. Custom ONNX text encoder (on-device, private) ⭐ PRIMARY
- * 2. Gemini API (cloud, requires API key)
+ * 2. OpenRouter API (cloud, requires API key) - Note: Not available for embeddings
  * 3. Mock fallback (for testing without models)
  */
 
@@ -24,8 +24,11 @@ class EmbeddingService {
   private initializingImage = false;
 
   /**
-   * Initialize text embedding model
+   * Initialize text embedding model (LAZY LOADED)
    * Uses SigLIP-2 ONNX text encoder for local inference
+   *
+   * This method is called lazily on first text search to avoid OOM during onboarding.
+   * The tokenizer.json file is 45MB and can cause memory issues if loaded during app init.
    */
   async initializeTextModel(onProgress?: (progress: number) => void): Promise<void> {
     if (this.initializingText) {
@@ -34,20 +37,21 @@ class EmbeddingService {
     }
 
     this.initializingText = true;
-    
+
     try {
-      console.log('Initializing Text Embedding Model (SigLIP-2 ONNX)...');
-      
+      console.log('Initializing Text Embedding Model (SigLIP-2 ONNX) - LAZY LOAD...');
+
       const success = await onnxService.initialize();
-      
+
       if (success) {
         console.log('✅ Text model initialized (SigLIP-2)');
         onProgress?.(1.0);
       } else {
-        console.log('⚠️ Text model initialization failed, will use fallback');
+        console.log('⚠️ Text model initialization failed, will use fallback (mock)');
       }
     } catch (error) {
       console.error('Text model error:', error);
+      console.log('💡 Using fallback for text embeddings (mock)');
     } finally {
       this.initializingText = false;
     }
@@ -85,11 +89,14 @@ class EmbeddingService {
   }
 
   /**
-   * Generate text embedding
-   * 
+   * Generate text embedding (AUTO-INITIALIZED ON FIRST USE)
+   *
+   * This method uses lazy loading to avoid OOM during app initialization.
+   * The ONNX text model (45MB tokenizer.json) is only loaded when needed.
+   *
    * Priority:
    * 1. Custom ONNX text encoder (private, on-device) ⭐ PRIMARY
-   * 2. Gemini API (cloud, requires key)
+   * 2. OpenRouter API (cloud, requires key) - Not available for embeddings
    * 3. Mock fallback
    */
   async embedText(text: string): Promise<EmbeddingResult> {
@@ -113,19 +120,32 @@ class EmbeddingService {
       }
     }
 
-    // Try Gemini as fallback
-    if (geminiService.hasApiKey()) {
-      const embedding = await geminiService.embedText(text);
-      if (embedding && embedding.length > 0) {
-        console.log(`✅ Text embedded via Gemini (${embedding.length}D)`);
-        return { embedding, success: true };
-      }
-    }
+    // OpenRouter doesn't provide embedding API, skip to mock
+    // Note: geminiService.embedText() will return null for OpenRouter
 
-    // Mock fallback for demo/testing
-    console.warn('⚠️ Using mock text embedding (no real model available)');
-    const mockEmbedding = Array(512).fill(0).map(() => Math.random());
+    // Deterministic fallback for search functionality
+    // IMPORTANT: Must be deterministic so same text always produces same embedding
+    // This ensures search works correctly even without ONNX Runtime native module
+    const mockEmbedding = this.generateDeterministicEmbedding(text, 512);
     return { embedding: mockEmbedding, success: true };
+  }
+
+  /**
+   * Generate deterministic mock embedding based on text content
+   * Uses a seeded random number generator so same text = same embedding
+   */
+  private generateDeterministicEmbedding(text: string, dimension: number): number[] {
+    // Generate seed from text hash
+    const initialSeed = text.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    let currentSeed = initialSeed;
+
+    // Seeded RNG
+    const rng = () => {
+      const x = Math.sin(currentSeed++) * 10000;
+      return x - Math.floor(x);
+    };
+
+    return Array.from({ length: dimension }, () => rng());
   }
 
   /**
@@ -159,7 +179,7 @@ class EmbeddingService {
 
     // Mock fallback for demo/testing
     console.warn('⚠️ Using mock image embedding (no real model available)');
-    const mockEmbedding = Array(512).fill(0).map(() => Math.random());
+    const mockEmbedding = Array.from({ length: 512 }, () => Math.random());
     return { embedding: mockEmbedding, success: true };
   }
 

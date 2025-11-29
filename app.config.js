@@ -29,7 +29,7 @@ module.exports = () => {
 
   const extra = {
     ...(app.expo.extra || {}),
-    geminiApiKey: process.env.GEMINI_API_KEY || null,
+    openrouterApiKey: process.env.OPENROUTER_API_KEY || null,
     nanoBananaApiKey: process.env.NANO_BANANA_API_KEY || null,
   };
 

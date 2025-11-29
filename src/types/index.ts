@@ -22,6 +22,9 @@ export interface IndexingProgress {
   processed: number;
   current?: string;
   error?: string;
+  stage?: 'vision_model' | 'stt_model' | 'indexing';
+  stageProgress?: number; // 0.0 to 1.0 for current stage
+  stageName?: string; // Human-readable stage name
 }
 
 export interface SearchResult {

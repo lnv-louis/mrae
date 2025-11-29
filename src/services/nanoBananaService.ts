@@ -1,16 +1,17 @@
 import Constants from 'expo-constants';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import geminiService from './geminiService';
 
 /**
- * Nano Banana Service - AI Image Editing
- * Uses Nano Banana API for intelligent photo editing with region selection
- * 
- * API Documentation: https://nanobanana.ai/docs
- * Fastest model: nano-banana-pro (lowest latency)
+ * Image Editing Service - AI Image Editing using OpenRouter
+ * Uses OpenRouter API (Gemini 3 Pro Image model) for intelligent photo editing
+ *
+ * Note: This service uses multimodal capabilities to understand
+ * the image and generate editing instructions. For actual image manipulation,
+ * you may need to implement additional image processing logic.
+ *
+ * Model: google/gemini-3-pro-image-preview
  */
-
-const NANO_BANANA_API_BASE = 'https://api.nanobanana.ai/v1';
-const FASTEST_MODEL = 'nano-banana-pro'; // Fastest response time
 
 interface EditRegion {
   x: number;
@@ -25,16 +26,22 @@ interface EditRequest {
   region?: EditRegion;
 }
 
-class NanoBananaService {
+class ImageEditingService {
   private apiKey: string | null = null;
 
   constructor() {
-    const extraKey = (Constants?.expoConfig?.extra as any)?.nanoBananaApiKey;
-    this.apiKey = process.env.NANO_BANANA_API_KEY || extraKey || null;
+    const extraKey = (Constants?.expoConfig?.extra as any)?.openrouterApiKey;
+    this.apiKey = process.env.OPENROUTER_API_KEY || extraKey || null;
+
+    // Set the API key in geminiService
+    if (this.apiKey) {
+      geminiService.setApiKey(this.apiKey);
+    }
   }
 
   setApiKey(key: string) {
     this.apiKey = key;
+    geminiService.setApiKey(key);
   }
 
   /**
@@ -43,23 +50,30 @@ class NanoBananaService {
    * @param prompt - Text prompt describing the edit
    * @param region - Optional region to edit (x, y, width, height in pixels)
    */
-  async editImage({ imageUri, prompt, region }: EditRequest): Promise<{ 
-    success: boolean; 
-    outputPath?: string; 
+  async editImage({ imageUri, prompt, region }: EditRequest): Promise<{
+    success: boolean;
+    outputPath?: string;
     error?: string;
   }> {
     if (!this.apiKey) {
-      console.error('❌ Nano Banana API key not configured');
-      return { 
-        success: false, 
-        error: 'API key not configured. Please set NANO_BANANA_API_KEY in .env' 
+      console.error('❌ OpenRouter API key not configured');
+      return {
+        success: false,
+        error: 'API key not configured. Please set OPENROUTER_API_KEY in .env'
       };
     }
 
     if (!prompt || !prompt.trim()) {
-      return { 
-        success: false, 
-        error: 'Prompt is required' 
+      return {
+        success: false,
+        error: 'Prompt is required'
+      };
+    }
+
+    if (!imageUri) {
+      return {
+        success: false,
+        error: 'Image URI is required'
       };
     }
 
@@ -69,94 +83,104 @@ class NanoBananaService {
       let imageFormat = 'image/jpeg';
 
       if (imageUri.startsWith('file://') || imageUri.startsWith('http')) {
-        // Read file as base64
-        const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        imageData = base64;
-        
-        // Detect format
-        if (imageUri.toLowerCase().endsWith('.png')) {
-          imageFormat = 'image/png';
+        try {
+          // Check if file exists first
+          const fileInfo = await FileSystem.getInfoAsync(imageUri);
+          if (!fileInfo.exists) {
+            return {
+              success: false,
+              error: 'Image file not found'
+            };
+          }
+
+          // Read file as base64
+          const base64 = await FileSystem.readAsStringAsync(imageUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          if (!base64 || base64.length === 0) {
+            return {
+              success: false,
+              error: 'Failed to read image file'
+            };
+          }
+
+          imageData = base64;
+
+          // Detect format
+          if (imageUri.toLowerCase().endsWith('.png')) {
+            imageFormat = 'image/png';
+          }
+        } catch (fileError: any) {
+          console.error('❌ File read error:', fileError);
+          return {
+            success: false,
+            error: `Failed to read image: ${fileError?.message || 'Unknown file error'}`
+          };
         }
       } else {
         imageData = imageUri; // Assume it's already base64
       }
 
-      // Prepare request body
-      const requestBody: any = {
-        model: FASTEST_MODEL,
-        image: `data:${imageFormat};base64,${imageData}`,
-        prompt: prompt.trim(),
-      };
-
-      // Add region if specified
+      // Build the prompt based on region selection
+      let fullPrompt = prompt.trim();
       if (region) {
-        requestBody.region = {
-          x: Math.round(region.x),
-          y: Math.round(region.y),
-          width: Math.round(region.width),
-          height: Math.round(region.height),
+        fullPrompt = `Edit the image region at coordinates (${Math.round(region.x)}, ${Math.round(region.y)}) with dimensions ${Math.round(region.width)}x${Math.round(region.height)}px. ${prompt.trim()}. Please provide detailed instructions for this edit.`;
+      }
+
+      console.log('🔄 Sending edit request to OpenRouter (Gemini 3 Pro Image)...');
+      console.log(`📝 Prompt: ${fullPrompt}`);
+      if (region) {
+        console.log(`📍 Region: ${region.width}x${region.height} at (${region.x}, ${region.y})`);
+      }
+
+      // Use AI to understand the image and generate editing instructions
+      const messages = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: fullPrompt },
+            { type: 'inline_data', inline_data: { mime_type: imageFormat, data: imageData } }
+          ]
+        }
+      ];
+
+      // Use the image model for vision tasks
+      const response = await geminiService.generateContent(messages as any, geminiService.getImageModel());
+
+      if (!response || !response.candidates || response.candidates.length === 0) {
+        return {
+          success: false,
+          error: 'Failed to get response from OpenRouter API'
         };
       }
 
-      console.log('🔄 Sending edit request to Nano Banana...');
-      
-      // Make API request
-      const response = await fetch(`${NANO_BANANA_API_BASE}/edit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const aiResponse = response.candidates[0]?.content?.parts?.find((p: any) => p.text)?.text || '';
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-        console.error('❌ Nano Banana API error:', errorMsg);
-        return { 
-          success: false, 
-          error: errorMsg 
+      if (!aiResponse) {
+        return {
+          success: false,
+          error: 'No text response from API'
         };
       }
 
-      const result = await response.json();
-      
-      // Extract edited image (could be base64 or URL)
-      let outputPath: string;
-      
-      if (result.image) {
-        // Save base64 image to file
-        const base64Data = result.image.replace(/^data:image\/\w+;base64,/, '');
-        const fileName = `edited_${Date.now()}.${imageFormat === 'image/png' ? 'png' : 'jpg'}`;
-        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-        
-        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        
-        outputPath = fileUri;
-      } else if (result.output_url) {
-        outputPath = result.output_url;
-      } else {
-        return { 
-          success: false, 
-          error: 'No image returned from API' 
-        };
-      }
+      console.log('✅ AI analysis complete:', aiResponse);
 
-      console.log('✅ Image edited successfully');
-      return { 
-        success: true, 
-        outputPath 
+      // For now, return the original image with AI analysis
+      // In a production app, you would use the AI response to guide actual image editing
+      // using a library like react-native-image-editor or react-native-canvas
+      console.log('⚠️ Note: Full image editing capabilities require additional image processing libraries');
+      console.log('📝 AI Suggestion:', aiResponse);
+
+      return {
+        success: false,
+        error: `Image editing feature requires additional setup. AI suggested: ${aiResponse.substring(0, 200)}...`
       };
     } catch (error: any) {
-      console.error('❌ Nano Banana edit error:', error);
-      return { 
-        success: false, 
-        error: error?.message || 'Failed to edit image' 
+      console.error('❌ Image editing error:', error);
+      return {
+        success: false,
+        error: error?.message || 'Failed to edit image'
       };
     }
   }
@@ -164,16 +188,16 @@ class NanoBananaService {
   /**
    * Legacy method for compatibility
    */
-  async applyDiff(originalPath: string, instructions: string): Promise<{ 
-    success: boolean; 
-    outputPath?: string; 
-    summary?: string 
+  async applyDiff(originalPath: string, instructions: string): Promise<{
+    success: boolean;
+    outputPath?: string;
+    summary?: string
   }> {
     const result = await this.editImage({
       imageUri: originalPath,
       prompt: instructions,
     });
-    
+
     return {
       success: result.success,
       outputPath: result.outputPath,
@@ -182,5 +206,5 @@ class NanoBananaService {
   }
 }
 
-export default new NanoBananaService();
+export default new ImageEditingService();
 

@@ -59,3 +59,5 @@ web-build/
 
 # @end expo-cli
 
+# Environment variables
+.env

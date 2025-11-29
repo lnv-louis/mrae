@@ -17,6 +17,7 @@ import NeuralOnboarding from './src/screens/NeuralOnboarding';
 import PhotoDetailScreen from './src/screens/PhotoDetailScreen';
 import { colors, radius, spacing } from './src/theme';
 import indexingService from './src/services/indexingService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -114,14 +115,53 @@ function TabNavigator() {
   );
 }
 
+const STORAGE_KEY_HAS_SEEN_WELCOME = '@mrae_has_seen_welcome';
+
 export default function App() {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null);
+  const [isCheckingFirstLaunch, setIsCheckingFirstLaunch] = useState(true);
 
+  // Check if this is the first launch
+  useEffect(() => {
+    async function checkFirstLaunch() {
+      try {
+        const hasSeenWelcome = await AsyncStorage.getItem(STORAGE_KEY_HAS_SEEN_WELCOME);
+        setIsFirstLaunch(hasSeenWelcome !== 'true');
+      } catch (error) {
+        console.error('Error checking first launch:', error);
+        setIsFirstLaunch(true); // Default to first launch on error
+      } finally {
+        setIsCheckingFirstLaunch(false);
+      }
+    }
+    checkFirstLaunch();
+  }, []);
+
+  const handleOnboardingComplete = async () => {
+    // Mark welcome as seen
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_HAS_SEEN_WELCOME, 'true');
+    } catch (error) {
+      console.error('Error saving welcome status:', error);
+    }
+    setHasCompletedOnboarding(true);
+  };
+
+  // Still checking first launch status
+  if (isCheckingFirstLaunch) {
+    return null; // Or a splash screen
+  }
+
+  // Show onboarding (with or without welcome screen)
   if (!hasCompletedOnboarding) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <NeuralOnboarding onComplete={() => setHasCompletedOnboarding(true)} />
+          <NeuralOnboarding
+            onComplete={handleOnboardingComplete}
+            skipWelcome={!isFirstLaunch}
+          />
           <StatusBar style="dark" />
         </SafeAreaProvider>
       </GestureHandlerRootView>

@@ -12,6 +12,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { PhotoMetadata } from '../types';
 import { BlurView } from 'expo-blur';
+import { colors, spacing, radius } from '../theme';
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
@@ -23,7 +24,7 @@ interface CleanupModeProps {
   onFinish: (photosToDelete: PhotoMetadata[]) => void;
 }
 
-const Card = ({ photo, onSwipeComplete, index }: { photo: PhotoMetadata; onSwipeComplete: (direction: 'left' | 'right') => void; index: number }) => {
+const Card = ({ photo, onSwipeComplete, index, isTopCard }: { photo: PhotoMetadata; onSwipeComplete: (direction: 'left' | 'right') => void; index: number; isTopCard: boolean }) => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -31,7 +32,7 @@ const Card = ({ photo, onSwipeComplete, index }: { photo: PhotoMetadata; onSwipe
   const savedTranslateY = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
-    .enabled(true)
+    .enabled(isTopCard) // Only enable gestures on the top card
     .minDistance(10)
     .onStart(() => {
       savedTranslateX.value = translateX.value;
@@ -94,7 +95,7 @@ const Card = ({ photo, onSwipeComplete, index }: { photo: PhotoMetadata; onSwipe
   if (index > 2) return null;
 
   const cardStyle = {
-    zIndex: -index,
+    zIndex: 100 - index, // Top card (index 0) has highest z-index
     top: index * 10,
     transform: [{ scale: 1 - index * 0.05 }],
   };
@@ -120,8 +121,30 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [photosToDelete, setPhotosToDelete] = React.useState<PhotoMetadata[]>([]);
 
+  // Handle empty photos array
+  if (!photos || photos.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.finishCard}>
+          <Text style={styles.finishTitle}>No photos to review</Text>
+          <TouchableOpacity style={styles.finishButton} onPress={() => onFinish([])}>
+            <Text style={styles.finishButtonText}>Return to Gallery</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   const handleSwipe = useCallback((direction: 'left' | 'right') => {
     const photo = photos[currentIndex];
+
+    if (!photo) {
+      console.warn('No photo at current index:', currentIndex);
+      return;
+    }
+
+    console.log(`Swiped ${direction} on photo ${currentIndex + 1}/${photos.length}`);
+
     if (direction === 'left') {
       // Queue for deletion instead of deleting immediately
       setPhotosToDelete(prev => {
@@ -136,7 +159,7 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
     } else {
       onKeep(photo);
     }
-    
+
     if (currentIndex >= photos.length - 1) {
       // Finished all photos, will be handled in setPhotosToDelete callback
     } else {
@@ -168,7 +191,7 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
   }
 
   // Show current card and next few cards
-  const visiblePhotos = photos.slice(currentIndex, currentIndex + 3).map((p, i) => ({...p, originalIndex: currentIndex + i}));
+  const visiblePhotos = photos.slice(currentIndex, currentIndex + 3);
 
   return (
     <View style={styles.container}>
@@ -185,7 +208,7 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
               </View>
             )}
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.closeButton}
             onPress={handleFinish}
           >
@@ -194,31 +217,42 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
         </View>
         <Text style={styles.subtitle}>Swipe Left to Delete, Right to Keep</Text>
       </BlurView>
-      
+
       <View style={styles.cardContainer}>
-        {visiblePhotos.reverse().map((photo, index) => (
-           <Card 
-             key={photo.id} 
-             photo={photo} 
-             index={visiblePhotos.length - 1 - index} // Pass index relative to stack (0 is top)
-             onSwipeComplete={handleSwipe} 
-           />
-        ))}
+        {/* Render cards in reverse order so top card is rendered last (highest z-index) */}
+        {[...visiblePhotos].reverse().map((photo, reversedIndex) => {
+          const actualIndex = visiblePhotos.length - 1 - reversedIndex;
+          return (
+            <Card
+              key={`${photo.id}-${currentIndex + actualIndex}`}
+              photo={photo}
+              index={actualIndex}
+              isTopCard={actualIndex === 0}
+              onSwipeComplete={handleSwipe}
+            />
+          );
+        })}
       </View>
 
       <View style={styles.buttonRow}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleSwipe('left')}
-        >
-          <Ionicons name="trash-outline" size={28} color="#FF3B30" />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.keepButton]}
-          onPress={() => handleSwipe('right')}
-        >
-          <Ionicons name="heart" size={28} color="#4CD964" />
-        </TouchableOpacity>
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => handleSwipe('left')}
+          >
+            <Ionicons name="close" size={32} color={colors.neutral.white} />
+          </TouchableOpacity>
+          <Text style={styles.buttonLabel}>Delete</Text>
+        </View>
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.keepButton]}
+            onPress={() => handleSwipe('right')}
+          >
+            <Ionicons name="heart" size={32} color={colors.neutral.white} />
+          </TouchableOpacity>
+          <Text style={styles.buttonLabel}>Keep</Text>
+        </View>
       </View>
     </View>
   );
@@ -229,7 +263,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: colors.background.primary,
   },
   headerBar: {
     position: 'absolute',
@@ -239,8 +273,8 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     paddingTop: 50,
     paddingBottom: 15,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: spacing.l,
+    backgroundColor: 'rgba(93, 64, 55, 0.95)',
   },
   headerContent: {
     flexDirection: 'row',
@@ -287,15 +321,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'absolute',
-    borderRadius: 24,
-    backgroundColor: '#2E1A24',
-    shadowColor: '#000',
+    borderRadius: radius.xl,
+    backgroundColor: colors.neutral.white,
+    shadowColor: colors.warm.primary,
     shadowOffset: {
       width: 0,
       height: 8,
     },
-    shadowOpacity: 0.44,
-    shadowRadius: 10.32,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
     elevation: 16,
   },
   image: {
@@ -313,15 +347,15 @@ const styles = StyleSheet.create({
   },
   keepOverlay: {
     left: 40,
-    borderColor: '#4CD964',
+    borderColor: colors.warm.accent,
     transform: [{ rotate: '-15deg' }],
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(255, 110, 64, 0.2)',
   },
   deleteOverlay: {
     right: 40,
-    borderColor: '#FF3B30',
+    borderColor: colors.semantic.error,
     transform: [{ rotate: '15deg' }],
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(239, 83, 80, 0.2)',
   },
   overlayText: {
     fontSize: 32,
@@ -335,33 +369,45 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    marginTop: 40,
-    marginBottom: 40,
+    position: 'absolute',
+    bottom: spacing.xl + 20,
+    left: 0,
+    right: 0,
     justifyContent: 'center',
+    alignItems: 'flex-end',
+    gap: spacing.xxl * 2,
+    paddingHorizontal: spacing.xl,
+  },
+  buttonGroup: {
     alignItems: 'center',
-    gap: 40,
+    gap: spacing.s,
   },
   actionButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#FFFFFF',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.warm.primary,
     shadowOffset: {
       width: 0,
       height: 4,
     },
     shadowOpacity: 0.3,
-    shadowRadius: 4.65,
+    shadowRadius: 8,
     elevation: 8,
   },
   deleteButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    backgroundColor: colors.semantic.error,
   },
   keepButton: {
-    backgroundColor: 'rgba(76, 217, 100, 0.1)',
+    backgroundColor: colors.warm.accent,
+  },
+  buttonLabel: {
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   finishCard: {
     padding: 40,

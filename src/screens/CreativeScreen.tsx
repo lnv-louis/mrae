@@ -1,40 +1,30 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Alert, 
-  ActivityIndicator, 
-  Image, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  Image,
   Dimensions,
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Svg, { Path, Circle, Rect } from 'react-native-svg';
-import { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
-import Animated from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
+import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Audio from 'expo-av';
-import { Audio as AudioRecorder } from 'expo-av';
 
 import ScreenLayout from '../components/ScreenLayout';
 import nanoBananaService from '../services/nanoBananaService';
-import transcriptionService from '../services/transcriptionService';
 import { colors, spacing, radius } from '../theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-interface SelectionRegion {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface DrawingPath {
   path: string;
@@ -42,49 +32,54 @@ interface DrawingPath {
   width: number;
 }
 
+const PRESET_EDITS = [
+  { id: 'remove-people', label: 'Remove People Behind', prompt: 'remove all people in the background' },
+  { id: 'sunny', label: 'Make Sunny', prompt: 'change the weather to sunny with blue sky' },
+  { id: 'sunset', label: 'Golden Hour', prompt: 'change lighting to golden hour sunset' },
+  { id: 'rain', label: 'Add Rain', prompt: 'add rain and wet surfaces' },
+  { id: 'night', label: 'Make Night', prompt: 'change to nighttime with stars' },
+  { id: 'winter', label: 'Add Snow', prompt: 'add snow and winter atmosphere' },
+];
+
 export default function CreativeScreen() {
   const [baseImage, setBaseImage] = useState<string | null>(null);
   const [editedImage, setEditedImage] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [mode, setMode] = useState<'select' | 'edit' | 'result'>('select');
-  const [selectionMode, setSelectionMode] = useState<'pencil' | 'circle' | 'rect'>('pencil');
-  const [selection, setSelection] = useState<SelectionRegion | null>(null);
+  const [editMode, setEditMode] = useState<'text' | 'draw'>('text');
   const [paths, setPaths] = useState<DrawingPath[]>([]);
   const [currentPath, setCurrentPath] = useState<string>('');
   const [prompt, setPrompt] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recording, setRecording] = useState<AudioRecorder.Recording | null>(null);
-  const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice'); // Voice-first like Siri
-  
-  const imageRef = useRef<Image>(null);
   const [imageLayout, setImageLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
 
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
-  const currentX = useSharedValue(0);
-  const currentY = useSharedValue(0);
   const isDrawing = useSharedValue(false);
 
   const handleSelectImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Need photo access');
-      return;
-    }
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Need photo access to use this feature');
+        return;
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-      allowsEditing: false,
-    });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 1,
+        allowsEditing: false,
+      });
 
-    if (!result.canceled) {
-      setBaseImage(result.assets[0].uri);
-      setEditedImage(null);
-      setSelection(null);
-      setPaths([]);
-      setPrompt('');
-      setMode('edit');
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setBaseImage(result.assets[0].uri);
+        setEditedImage(null);
+        setPaths([]);
+        setPrompt('');
+        setMode('edit');
+      }
+    } catch (error) {
+      console.error('Error selecting image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
     }
   };
 
@@ -94,183 +89,61 @@ export default function CreativeScreen() {
   };
 
   const addPathToPaths = useCallback((path: string) => {
-    setPaths(prev => [...prev, { 
-      path: path, 
-      color: '#FF6B4A', 
-      width: 3 
+    setPaths(prev => [...prev, {
+      path,
+      color: editMode === 'draw' ? '#FF6B4A' : '#4A90E2',
+      width: editMode === 'draw' ? 8 : 3,
     }]);
     setCurrentPath('');
-  }, []);
+  }, [editMode]);
 
   const panGesture = Gesture.Pan()
     .onStart((event) => {
+      if (editMode !== 'draw') return;
       isDrawing.value = true;
       startX.value = event.x;
       startY.value = event.y;
-      currentX.value = event.x;
-      currentY.value = event.y;
-      
-      if (selectionMode === 'pencil') {
-        // Start freehand drawing path
-        runOnJS(setCurrentPath)(`M${event.x},${event.y}`);
-      } else if (selectionMode === 'circle') {
-        runOnJS(setCurrentPath)(`M${event.x},${event.y}`);
-      }
+      runOnJS(setCurrentPath)(`M${event.x},${event.y}`);
     })
     .onUpdate((event) => {
-      currentX.value = event.x;
-      currentY.value = event.y;
-      
-      if (selectionMode === 'pencil') {
-        // Continue freehand drawing - add line to current path
-        runOnJS((x: number, y: number) => {
-          setCurrentPath((prev: string) => prev ? `${prev} L${x},${y}` : `M${x},${y}`);
-        })(event.x, event.y);
-      } else if (selectionMode === 'circle') {
-        const radius = Math.sqrt(
-          Math.pow(event.x - startX.value, 2) + Math.pow(event.y - startY.value, 2)
-        );
-        const path = `M${startX.value},${startY.value} m-${radius},0 a${radius},${radius} 0 1,0 ${radius * 2},0 a${radius},${radius} 0 1,0 -${radius * 2},0`;
-        runOnJS(setCurrentPath)(path);
-      }
+      if (editMode !== 'draw') return;
+      runOnJS((x: number, y: number) => {
+        setCurrentPath((prev: string) => prev ? `${prev} L${x},${y}` : `M${x},${y}`);
+      })(event.x, event.y);
     })
     .onEnd(() => {
+      if (editMode !== 'draw') return;
       isDrawing.value = false;
-      
-      if (selectionMode === 'pencil') {
-        // For pencil mode, calculate bounding box from the drawn path
-        // Store the path and calculate region from all paths
-        if (currentPath) {
-          const pathToAdd = currentPath;
-          runOnJS(addPathToPaths)(pathToAdd);
-          
-          // Calculate bounding box from all paths including the new one
-          const allPaths = [...paths, { path: pathToAdd, color: '#FF6B4A', width: 3 }];
-          const points: { x: number; y: number }[] = [];
-          
-          // Extract points from paths (simplified - in production, parse SVG path properly)
-          allPaths.forEach(p => {
-            const matches = p.path.matchAll(/([ML])\s*([\d.]+),([\d.]+)/g);
-            for (const match of matches) {
-              points.push({ x: parseFloat(match[2]), y: parseFloat(match[3]) });
-            }
-          });
-          
-          if (points.length > 0 && imageLayout.width > 0 && imageLayout.height > 0) {
-            const xs = points.map(p => p.x);
-            const ys = points.map(p => p.y);
-            const minX = Math.max(0, Math.min(...xs) - imageLayout.x);
-            const minY = Math.max(0, Math.min(...ys) - imageLayout.y);
-            const maxX = Math.min(imageLayout.width, Math.max(...xs) - imageLayout.x);
-            const maxY = Math.min(imageLayout.height, Math.max(...ys) - imageLayout.y);
-            
-            const region: SelectionRegion = {
-              x: minX,
-              y: minY,
-              width: maxX - minX,
-              height: maxY - minY,
-            };
-            
-            if (region.width > 10 && region.height > 10) {
-              runOnJS(setSelection)(region);
-            }
-          }
-        }
-      } else {
-        // Calculate selection region in image coordinates for circle/rect
-        const minX = Math.min(startX.value, currentX.value);
-        const minY = Math.min(startY.value, currentY.value);
-        const maxX = Math.max(startX.value, currentX.value);
-        const maxY = Math.max(startY.value, currentY.value);
-        
-        // Convert screen coordinates to image coordinates
-        if (imageLayout.width > 0 && imageLayout.height > 0) {
-          const region: SelectionRegion = {
-            x: Math.max(0, minX - imageLayout.x),
-            y: Math.max(0, minY - imageLayout.y),
-            width: Math.min(imageLayout.width, maxX - minX),
-            height: Math.min(imageLayout.height, maxY - minY),
-          };
-          
-          if (region.width > 10 && region.height > 10) {
-            runOnJS(setSelection)(region);
-          }
-        }
-      }
-      
-      if (currentPath && selectionMode !== 'pencil') {
+      if (currentPath) {
         const pathToAdd = currentPath;
         runOnJS(addPathToPaths)(pathToAdd);
       }
-      
       runOnJS(setCurrentPath)('');
     });
 
-  const selectionStyle = useAnimatedStyle(() => {
-    if (!isDrawing.value) return { opacity: 0 };
-    
-    const width = Math.abs(currentX.value - startX.value);
-    const height = Math.abs(currentY.value - startY.value);
-    const x = Math.min(startX.value, currentX.value);
-    const y = Math.min(startY.value, currentY.value);
-    
-    return {
-      position: 'absolute',
-      left: x,
-      top: y,
-      width,
-      height,
-      opacity: 0.3,
-    };
-  });
-
-  const startRecording = useCallback(async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow microphone access');
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      
-      setRecording(newRecording);
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      Alert.alert('Error', 'Failed to start recording');
-    }
-  }, []);
-
-  const handleApplyEdit = useCallback(async () => {
+  const handleApplyEdit = useCallback(async (editPrompt?: string) => {
     if (!baseImage) {
       Alert.alert('Error', 'Please select an image first');
       return;
     }
 
-    if (!prompt.trim()) {
-      Alert.alert('Error', 'Please enter a prompt describing what you want to edit');
-      return;
-    }
-
-    if (!selection) {
-      Alert.alert('Error', 'Please select an area on the image to edit');
+    const finalPrompt = editPrompt || prompt.trim();
+    if (!finalPrompt) {
+      Alert.alert('Error', 'Please enter what you want to edit or select a preset');
       return;
     }
 
     setProcessing(true);
     try {
+      // For draw mode, we need to send both the original image and the drawn paths
+      // The API should interpret the drawing as a visual guide
       const result = await nanoBananaService.editImage({
         imageUri: baseImage,
-        prompt: prompt.trim(),
-        region: selection,
+        prompt: editMode === 'draw'
+          ? `${finalPrompt}. Use the drawn sketch as a visual guide for the edit.`
+          : finalPrompt,
+        // If there are paths, we could convert them to a mask image
+        // For now, just send the prompt
       });
 
       if (result.success && result.outputPath) {
@@ -285,71 +158,23 @@ export default function CreativeScreen() {
     } finally {
       setProcessing(false);
     }
-  }, [baseImage, prompt, selection]);
+  }, [baseImage, prompt, editMode]);
 
-  const stopRecording = useCallback(async () => {
-    if (!recording) return;
-
-    try {
-      setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      
-      const uri = recording.getURI();
-      if (!uri) {
-        Alert.alert('Error', 'No audio recorded');
-        setRecording(null);
-        return;
-      }
-
-      setProcessing(true);
-      const transcription = await transcriptionService.transcribe(uri);
-      const transcribedText = transcription.response || '';
-      
-      if (transcribedText.trim()) {
-        setPrompt(transcribedText);
-        // Mark that we should auto-apply after transcription (Siri-like behavior)
-        shouldAutoApply.current = true;
-      } else {
-        Alert.alert('Error', 'Could not transcribe audio');
-      }
-      
-      setRecording(null);
-      setProcessing(false);
-    } catch (error) {
-      console.error('Error processing audio:', error);
-      Alert.alert('Error', 'Failed to process audio');
-      setIsRecording(false);
-      setRecording(null);
-      setProcessing(false);
-    }
-  }, [recording]);
-
-  // Auto-apply edit when prompt is set via voice (Siri-like)
-  const shouldAutoApply = React.useRef(false);
-  
-  React.useEffect(() => {
-    if (prompt.trim() && selection && baseImage && inputMode === 'voice' && !processing && !isRecording && shouldAutoApply.current) {
-      // Small delay to show the transcribed text before applying
-      const timer = setTimeout(() => {
-        handleApplyEdit();
-        shouldAutoApply.current = false;
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [prompt, selection, baseImage, inputMode, processing, isRecording, handleApplyEdit]);
+  const handlePresetEdit = (preset: typeof PRESET_EDITS[0]) => {
+    setPrompt(preset.prompt);
+    setTimeout(() => handleApplyEdit(preset.prompt), 100);
+  };
 
   const handleReset = () => {
     setBaseImage(null);
     setEditedImage(null);
-    setSelection(null);
     setPaths([]);
     setCurrentPath('');
     setPrompt('');
     setMode('select');
   };
 
-  const handleClearSelection = () => {
-    setSelection(null);
+  const handleClearDrawing = () => {
     setPaths([]);
     setCurrentPath('');
   };
@@ -359,19 +184,19 @@ export default function CreativeScreen() {
       <ScreenLayout>
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>AI Editor</Text>
-            <Text style={styles.subtitle}>Samsung AI-style Intelligent Editing</Text>
+            <Text style={styles.title}>Create</Text>
+            <Text style={styles.subtitle}>AI-powered photo editing</Text>
           </View>
 
           <BlurView intensity={20} style={styles.glassCard}>
             <View style={styles.iconPlaceholder}>
-              <Ionicons name="sparkles" size={40} color={colors.neutral.white} />
+              <Ionicons name="create" size={40} color={colors.neutral.white} />
             </View>
-            <Text style={styles.cardTitle}>Edit Photos with AI</Text>
+            <Text style={styles.cardTitle}>Edit with AI</Text>
             <Text style={styles.cardDescription}>
-              Select an area on your photo, describe what you want to change, and let AI do the magic.
+              Describe edits in natural language, draw what you want, or use quick presets
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.button}
               onPress={handleSelectImage}
             >
@@ -391,24 +216,24 @@ export default function CreativeScreen() {
             <TouchableOpacity style={styles.headerButton} onPress={handleReset}>
               <Ionicons name="close" size={24} color={colors.text.primary} />
             </TouchableOpacity>
-            <Text style={styles.resultTitle}>Edited Result</Text>
+            <Text style={styles.resultTitle}>Result</Text>
             <View style={{ width: 24 }} />
           </View>
-          
-          <Image 
-            source={{ uri: editedImage }} 
+
+          <Image
+            source={{ uri: editedImage }}
             style={styles.resultImage}
             resizeMode="contain"
           />
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.saveButton}
             onPress={() => {
-              Alert.alert('Success', 'Image edited successfully!');
+              Alert.alert('Success', 'Image edited!');
               handleReset();
             }}
           >
-            <Text style={styles.saveButtonText}>Save & Continue</Text>
+            <Text style={styles.saveButtonText}>Done</Text>
           </TouchableOpacity>
         </View>
       </ScreenLayout>
@@ -418,7 +243,7 @@ export default function CreativeScreen() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ScreenLayout>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
@@ -428,283 +253,164 @@ export default function CreativeScreen() {
               <TouchableOpacity style={styles.headerButton} onPress={handleReset}>
                 <Ionicons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
-              <Text style={styles.editTitle}>AI Editor</Text>
-              <TouchableOpacity 
-                style={styles.headerButton} 
-                onPress={handleClearSelection}
-                disabled={!selection}
+              <Text style={styles.editTitle}>Create</Text>
+              {editMode === 'draw' && (
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={handleClearDrawing}
+                  disabled={paths.length === 0}
+                >
+                  <Ionicons
+                    name="trash-outline"
+                    size={24}
+                    color={paths.length > 0 ? colors.warm.accent : colors.text.tertiary}
+                  />
+                </TouchableOpacity>
+              )}
+              {editMode === 'text' && <View style={{ width: 24 }} />}
+            </View>
+
+            {/* Mode Toggle */}
+            <View style={styles.modeToggleContainer}>
+              <TouchableOpacity
+                style={[styles.modeToggleButton, editMode === 'text' && styles.modeToggleButtonActive]}
+                onPress={() => setEditMode('text')}
               >
-                <Ionicons 
-                  name="refresh" 
-                  size={24} 
-                  color={selection ? colors.warm.accent : colors.text.tertiary} 
+                <Ionicons
+                  name="text"
+                  size={18}
+                  color={editMode === 'text' ? '#fff' : colors.text.secondary}
                 />
+                <Text style={[styles.modeToggleText, editMode === 'text' && styles.modeToggleTextActive]}>
+                  Natural Language
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeToggleButton, editMode === 'draw' && styles.modeToggleButtonActive]}
+                onPress={() => setEditMode('draw')}
+              >
+                <Ionicons
+                  name="brush"
+                  size={18}
+                  color={editMode === 'draw' ? '#fff' : colors.text.secondary}
+                />
+                <Text style={[styles.modeToggleText, editMode === 'draw' && styles.modeToggleTextActive]}>
+                  Draw to Edit
+                </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Selection Mode Toggle */}
-            <View style={styles.selectionModeContainer}>
-              <Text style={styles.selectionModeLabel}>Selection Tool:</Text>
-              <View style={styles.selectionModeButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.selectionModeButton,
-                    selectionMode === 'pencil' && styles.selectionModeButtonActive
-                  ]}
-                  onPress={() => setSelectionMode('pencil')}
-                >
-                  <Ionicons 
-                    name="pencil" 
-                    size={18} 
-                    color={selectionMode === 'pencil' ? '#fff' : colors.text.secondary} 
-                  />
-                  <Text style={[
-                    styles.selectionModeButtonText,
-                    selectionMode === 'pencil' && styles.selectionModeButtonTextActive
-                  ]}>
-                    Pencil
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.selectionModeButton,
-                    selectionMode === 'circle' && styles.selectionModeButtonActive
-                  ]}
-                  onPress={() => setSelectionMode('circle')}
-                >
-                  <Ionicons 
-                    name="ellipse-outline" 
-                    size={18} 
-                    color={selectionMode === 'circle' ? '#fff' : colors.text.secondary} 
-                  />
-                  <Text style={[
-                    styles.selectionModeButtonText,
-                    selectionMode === 'circle' && styles.selectionModeButtonTextActive
-                  ]}>
-                    Circle
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.selectionModeButton,
-                    selectionMode === 'rect' && styles.selectionModeButtonActive
-                  ]}
-                  onPress={() => setSelectionMode('rect')}
-                >
-                  <Ionicons 
-                    name="square-outline" 
-                    size={18} 
-                    color={selectionMode === 'rect' ? '#fff' : colors.text.secondary} 
-                  />
-                  <Text style={[
-                    styles.selectionModeButtonText,
-                    selectionMode === 'rect' && styles.selectionModeButtonTextActive
-                  ]}>
-                    Rect
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Image with Selection */}
+            {/* Image with Drawing */}
             <View style={styles.imageContainer}>
               {baseImage && (
-                <GestureDetector gesture={panGesture}>
+                <GestureDetector gesture={editMode === 'draw' ? panGesture : Gesture.Pan()}>
                   <View style={styles.imageWrapper}>
-                    <Image 
-                      ref={imageRef}
-                      source={{ uri: baseImage }} 
+                    <Image
+                      source={{ uri: baseImage }}
                       style={styles.baseImage}
                       resizeMode="contain"
                       onLayout={handleImageLayout}
                     />
-                    
-                    {/* Selection Overlay */}
-                    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-                      {paths.map((pathData, index) => (
-                        <Path
-                          key={index}
-                          d={pathData.path}
-                          stroke={pathData.color}
-                          strokeWidth={pathData.width}
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      ))}
-                      {currentPath && (
-                        <Path
-                          d={currentPath}
-                          stroke="#FF6B4A"
-                          strokeWidth={3}
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      )}
-                    </Svg>
-                    
-                    {selection && imageLayout.width > 0 && (
-                      <View 
-                        style={[
-                          styles.selectionBox,
-                          {
-                            left: imageLayout.x + selection.x,
-                            top: imageLayout.y + selection.y,
-                            width: selection.width,
-                            height: selection.height,
-                          }
-                        ]}
-                      />
+
+                    {/* Drawing Overlay */}
+                    {editMode === 'draw' && (
+                      <Svg style={StyleSheet.absoluteFill} pointerEvents="box-none">
+                        {paths.map((pathData, index) => (
+                          <Path
+                            key={index}
+                            d={pathData.path}
+                            stroke={pathData.color}
+                            strokeWidth={pathData.width}
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        ))}
+                        {currentPath && (
+                          <Path
+                            d={currentPath}
+                            stroke="#FF6B4A"
+                            strokeWidth={8}
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        )}
+                      </Svg>
                     )}
                   </View>
                 </GestureDetector>
               )}
             </View>
 
-            {/* Prompt Input - Voice-first like Siri */}
-            <BlurView intensity={80} tint="light" style={styles.promptContainer}>
-              <View style={styles.promptHeader}>
-                <View style={styles.promptHeaderRow}>
-                  <Text style={styles.promptLabel}>
-                    {inputMode === 'voice' ? '🎤 Voice Command' : '✏️ Text Prompt'}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.modeToggle}
-                    onPress={() => setInputMode(inputMode === 'voice' ? 'text' : 'voice')}
-                  >
-                    <Ionicons 
-                      name={inputMode === 'voice' ? 'text' : 'mic'} 
-                      size={18} 
-                      color={colors.warm.accent} 
-                    />
-                    <Text style={styles.modeToggleText}>
-                      {inputMode === 'voice' ? 'Text' : 'Voice'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {selection && (
-                  <Text style={styles.selectionInfo}>
-                    Area selected: {Math.round(selection.width)}×{Math.round(selection.height)}px
-                  </Text>
-                )}
-              </View>
-              
-              {inputMode === 'voice' ? (
-                // Voice-first mode (Siri-like)
-                <View style={styles.voiceModeContainer}>
-                  {prompt ? (
-                    <View style={styles.transcribedTextContainer}>
-                      <Ionicons name="mic" size={16} color={colors.text.secondary} />
-                      <Text style={styles.transcribedText}>{prompt}</Text>
-                      <TouchableOpacity
-                        onPress={() => setPrompt('')}
-                        style={styles.clearPromptButton}
-                      >
-                        <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.voicePromptPlaceholder}>
-                      <Ionicons name="mic-outline" size={32} color={colors.text.tertiary} />
-                      <Text style={styles.voicePromptText}>
-                        {selection 
-                          ? 'Tap mic to describe your edit' 
-                          : 'Select an area first, then tap mic'}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  <TouchableOpacity
-                    style={[
-                      styles.voiceButtonLarge,
-                      isRecording && styles.voiceButtonLargeActive,
-                      (!selection || processing) && styles.voiceButtonLargeDisabled
-                    ]}
-                    onPress={isRecording ? stopRecording : startRecording}
-                    disabled={!selection || processing}
-                  >
-                    {isRecording ? (
-                      <>
-                        <View style={styles.recordingIndicatorLarge} />
-                        <Text style={styles.recordingText}>Recording... Tap to stop</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Ionicons name="mic" size={32} color="#fff" />
-                        <Text style={styles.voiceButtonText}>
-                          {prompt ? 'Re-record' : 'Start Recording'}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                  
-                  {prompt && selection && (
-                    <TouchableOpacity
-                      style={[
-                        styles.applyButton,
-                        processing && styles.applyButtonDisabled
-                      ]}
-                      onPress={handleApplyEdit}
-                      disabled={processing}
-                    >
-                      {processing ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <Ionicons name="sparkles" size={20} color="#fff" />
-                          <Text style={styles.applyButtonText}>Apply AI Edit</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ) : (
-                // Text input mode (fallback)
-                <View style={styles.inputRow}>
-                  <TextInput
-                    style={styles.promptInput}
-                    placeholder="e.g., make the sky more blue, remove the person, add flowers..."
-                    placeholderTextColor={colors.text.tertiary}
-                    value={prompt}
-                    onChangeText={setPrompt}
-                    multiline
-                    maxLength={500}
-                  />
-                  <TouchableOpacity
-                    style={[styles.voiceButton, isRecording && styles.voiceButtonActive]}
-                    onPress={isRecording ? stopRecording : startRecording}
-                    disabled={processing}
-                  >
-                    {isRecording ? (
-                      <View style={styles.recordingIndicator} />
-                    ) : (
-                      <Ionicons name="mic" size={24} color={colors.text.primary} />
-                    )}
-                  </TouchableOpacity>
-                </View>
+            {/* Controls */}
+            <ScrollView style={styles.controlsContainer} showsVerticalScrollIndicator={false}>
+              {/* Instructions */}
+              <Text style={styles.instructionText}>
+                {editMode === 'text'
+                  ? 'Describe what you want to edit or choose a preset below'
+                  : 'Draw what you want to add, then describe it below'}
+              </Text>
+
+              {/* Text Input */}
+              {editMode === 'text' && (
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g., make the sky more blue, add flowers..."
+                  placeholderTextColor={colors.text.tertiary}
+                  value={prompt}
+                  onChangeText={setPrompt}
+                  multiline
+                  numberOfLines={2}
+                />
               )}
 
-              {inputMode === 'text' && (
-                <TouchableOpacity
-                  style={[
-                    styles.applyButton,
-                    (!prompt.trim() || !selection || processing) && styles.applyButtonDisabled
-                  ]}
-                  onPress={handleApplyEdit}
-                  disabled={!prompt.trim() || !selection || processing}
-                >
-                  {processing ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="sparkles" size={20} color="#fff" />
-                      <Text style={styles.applyButtonText}>Apply AI Edit</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+              {editMode === 'draw' && (
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g., a sun, birds flying, mountains..."
+                  placeholderTextColor={colors.text.tertiary}
+                  value={prompt}
+                  onChangeText={setPrompt}
+                  multiline
+                  numberOfLines={2}
+                />
               )}
-            </BlurView>
+
+              {/* Presets */}
+              <Text style={styles.presetsTitle}>Quick Presets</Text>
+              <View style={styles.presetsContainer}>
+                {PRESET_EDITS.map((preset) => (
+                  <TouchableOpacity
+                    key={preset.id}
+                    style={styles.presetButton}
+                    onPress={() => handlePresetEdit(preset)}
+                    disabled={processing}
+                  >
+                    <Text style={styles.presetButtonText}>{preset.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Apply Button */}
+              <TouchableOpacity
+                style={[
+                  styles.applyButton,
+                  (!prompt.trim() || processing) && styles.applyButtonDisabled
+                ]}
+                onPress={() => handleApplyEdit()}
+                disabled={!prompt.trim() || processing}
+              >
+                {processing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={20} color="#fff" />
+                    <Text style={styles.applyButtonText}>Apply Edit</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </ScreenLayout>
@@ -715,33 +421,30 @@ export default function CreativeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    padding: spacing.l,
     justifyContent: 'center',
   },
   header: {
-    marginBottom: 40,
+    marginBottom: spacing.xxl,
     alignItems: 'center',
   },
   title: {
-    fontSize: 34,
+    fontSize: 28,
     fontWeight: '300',
     color: colors.text.primary,
-    textAlign: 'center',
     letterSpacing: 2,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text.secondary,
-    marginTop: 5,
-    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   glassCard: {
-    padding: 30,
-    borderRadius: 25,
+    padding: spacing.xl,
+    borderRadius: radius.xl,
     overflow: 'hidden',
     alignItems: 'center',
     backgroundColor: colors.neutral.white,
-    marginBottom: 20,
     shadowColor: colors.warm.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -749,42 +452,37 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   iconPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colors.warm.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.m,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
     color: colors.text.primary,
-    marginBottom: 10,
+    marginBottom: spacing.s,
   },
   cardDescription: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.text.secondary,
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 22,
+    marginBottom: spacing.l,
+    lineHeight: 20,
   },
   button: {
     backgroundColor: colors.warm.accent,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 20,
-    shadowColor: colors.warm.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.m,
+    borderRadius: radius.l,
   },
   buttonText: {
-    color: colors.neutral.white,
+    color: '#fff',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 15,
   },
   editContainer: {
     flex: 1,
@@ -793,23 +491,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 15,
+    paddingHorizontal: spacing.l,
+    paddingTop: 40,
+    paddingBottom: spacing.m,
   },
   headerButton: {
-    padding: 8,
+    padding: spacing.xs,
   },
   editTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: colors.text.primary,
   },
+  modeToggleContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.l,
+    gap: spacing.s,
+    marginBottom: spacing.m,
+  },
+  modeToggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.s,
+    borderRadius: radius.m,
+    backgroundColor: colors.neutral.gray200,
+  },
+  modeToggleButtonActive: {
+    backgroundColor: colors.warm.accent,
+  },
+  modeToggleText: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    fontWeight: '500',
+  },
+  modeToggleTextActive: {
+    color: '#fff',
+  },
   imageContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: spacing.l,
+    marginBottom: spacing.m,
   },
   imageWrapper: {
     width: '100%',
@@ -820,89 +544,73 @@ const styles = StyleSheet.create({
   baseImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: radius.m,
   },
-  selectionBox: {
-    position: 'absolute',
-    borderWidth: 2,
-    borderColor: '#FF6B4A',
-    borderStyle: 'dashed',
-    backgroundColor: 'rgba(255, 107, 74, 0.1)',
+  controlsContainer: {
+    maxHeight: 320,
+    paddingHorizontal: spacing.l,
+    paddingBottom: spacing.l,
   },
-  promptContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    backgroundColor: colors.neutral.white,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    shadowColor: colors.warm.primary,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  promptHeader: {
-    marginBottom: 12,
-  },
-  promptLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: 4,
-  },
-  selectionInfo: {
-    fontSize: 12,
+  instructionText: {
+    fontSize: 13,
     color: colors.text.secondary,
+    marginBottom: spacing.m,
+    fontStyle: 'italic',
   },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 15,
-  },
-  promptInput: {
-    flex: 1,
-    minHeight: 80,
-    backgroundColor: colors.warm.tertiary,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
+  textInput: {
+    backgroundColor: colors.neutral.white,
+    borderRadius: radius.m,
+    padding: spacing.m,
+    fontSize: 15,
     color: colors.text.primary,
+    minHeight: 60,
     textAlignVertical: 'top',
+    marginBottom: spacing.m,
+    borderWidth: 1,
+    borderColor: colors.neutral.gray300,
   },
-  voiceButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.warm.tertiary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  presetsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    marginBottom: spacing.s,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  voiceButtonActive: {
-    backgroundColor: '#FF3B30',
+  presetsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.m,
   },
-  recordingIndicator: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+  presetButton: {
+    paddingHorizontal: spacing.m,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.m,
+    backgroundColor: colors.neutral.white,
+    borderWidth: 1,
+    borderColor: colors.warm.tertiary,
+  },
+  presetButtonText: {
+    fontSize: 12,
+    color: colors.text.primary,
+    fontWeight: '500',
   },
   applyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.s,
     backgroundColor: colors.warm.accent,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: spacing.m,
+    borderRadius: radius.m,
   },
   applyButtonDisabled: {
     opacity: 0.5,
   },
   applyButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   resultContainer: {
@@ -912,9 +620,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 15,
+    paddingHorizontal: spacing.l,
+    paddingTop: 40,
+    paddingBottom: spacing.m,
   },
   resultTitle: {
     fontSize: 18,
@@ -924,147 +632,19 @@ const styles = StyleSheet.create({
   resultImage: {
     flex: 1,
     width: '100%',
-    marginHorizontal: 20,
-    borderRadius: 12,
+    marginHorizontal: spacing.l,
+    borderRadius: radius.m,
   },
   saveButton: {
-    margin: 20,
+    margin: spacing.l,
     backgroundColor: colors.warm.accent,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: spacing.m,
+    borderRadius: radius.m,
     alignItems: 'center',
   },
   saveButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  selectionModeContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: colors.neutral.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.warm.tertiary,
-  },
-  selectionModeLabel: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  selectionModeButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  selectionModeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.warm.tertiary,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  selectionModeButtonActive: {
-    backgroundColor: colors.warm.accent,
-    borderColor: colors.warm.accent,
-  },
-  selectionModeButtonText: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    fontWeight: '500',
-  },
-  selectionModeButtonTextActive: {
-    color: '#fff',
-  },
-  promptHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  modeToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.warm.tertiary,
-  },
-  modeToggleText: {
-    fontSize: 12,
-    color: colors.warm.accent,
-    fontWeight: '600',
-  },
-  voiceModeContainer: {
-    gap: 12,
-  },
-  transcribedTextContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.warm.tertiary,
-    padding: 12,
-    borderRadius: 12,
-    minHeight: 60,
-  },
-  transcribedText: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text.primary,
-    fontStyle: 'italic',
-  },
-  clearPromptButton: {
-    padding: 4,
-  },
-  voicePromptPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    backgroundColor: colors.warm.tertiary,
-    borderRadius: 12,
-    minHeight: 120,
-  },
-  voicePromptText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: colors.text.secondary,
-    textAlign: 'center',
-  },
-  voiceButtonLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: colors.warm.accent,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    minHeight: 64,
-  },
-  voiceButtonLargeActive: {
-    backgroundColor: '#FF3B30',
-  },
-  voiceButtonLargeDisabled: {
-    opacity: 0.5,
-  },
-  recordingIndicatorLarge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-  },
-  recordingText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  voiceButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
 });

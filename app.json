@@ -16,7 +16,8 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mrae.app"
+      "bundleIdentifier": "com.mrae.app",
+      "icon": "./assets/mrae.png"
     },
     "android": {
       "adaptiveIcon": {
@@ -51,7 +52,13 @@
           "isAccessMediaLocationEnabled": true
         }
       ]
-    ]
+    ],
+    "extra": {
+      "openrouterApiKey": "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",
+      "nanoBananaApiKey": {},
+      "eas": {
+        "projectId": "8a09ccd2-253c-47f5-a0df-c10ce5476a7f"
+      }
+    }
   }
 }
-

@@ -205,6 +205,58 @@ class DatabaseService {
       return new Float32Array(0);
     });
   }
+
+  async getPhotoMetadata(photoId: string): Promise<{
+    id: string;
+    uri: string;
+    latitude: number | null;
+    longitude: number | null;
+    city: string | null;
+    timestamp: number | null;
+  } | null> {
+    if (!this.db) await this.init();
+
+    try {
+      const rows = await this.getAll(
+        'SELECT id, uri, latitude, longitude, city, timestamp FROM image_index WHERE id = ?',
+        [photoId]
+      );
+
+      if (rows.length === 0) {
+        return null;
+      }
+
+      const row = rows[0] as any;
+      return {
+        id: row.id,
+        uri: row.uri,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        city: row.city,
+        timestamp: row.timestamp,
+      };
+    } catch (error) {
+      console.error(`Error fetching photo metadata for ${photoId}:`, error);
+      return null;
+    }
+  }
+
+  async getPhotosByLabel(label: string, threshold: number = 0.25): Promise<string[]> {
+    if (!this.db) await this.init();
+    const rows = await this.getAll(
+      'SELECT image_id FROM image_labels WHERE label = ? AND score >= ? ORDER BY score DESC',
+      [label, threshold]
+    );
+    return rows.map((r: any) => r.image_id);
+  }
+
+  async getAllLabels(): Promise<Array<{ label: string; count: number }>> {
+    if (!this.db) await this.init();
+    const rows = await this.getAll(
+      'SELECT label, COUNT(*) as count FROM image_labels GROUP BY label ORDER BY count DESC'
+    );
+    return rows.map((r: any) => ({ label: r.label, count: r.count }));
+  }
 }
 
 export default new DatabaseService();
