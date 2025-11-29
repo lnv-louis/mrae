@@ -86,8 +86,8 @@ export default function GalleryScreen({ navigation }: any) {
   };
 
   const checkPermissionsAndLoad = async () => {
-    const hasPermission = await photoService.requestPermissions();
-    if (!hasPermission) {
+      const hasPermission = await photoService.requestPermissions();
+      if (!hasPermission) {
       Alert.alert('Permission Required', 'Please allow access to photos.');
       return;
     }
@@ -102,7 +102,7 @@ export default function GalleryScreen({ navigation }: any) {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
@@ -278,15 +278,15 @@ export default function GalleryScreen({ navigation }: any) {
           <>
             {viewMode === 'all' && (
               photos.length === 0 ? (
-                <Text style={styles.emptyText}>No photos found</Text>
-              ) : (
-                <PhotoGrid photos={photos} onPhotoPress={handlePhotoPress} />
+              <Text style={styles.emptyText}>No photos found</Text>
+          ) : (
+            <PhotoGrid photos={photos} onPhotoPress={handlePhotoPress} />
               )
             )}
             {viewMode === 'folders' && renderAlbums()}
             {viewMode === 'categories' && renderCategories()}
           </>
-        )}
+          )}
       </ScrollView>
 
       {/* Cleanup Mode Modal Overlay would go here or navigation */}

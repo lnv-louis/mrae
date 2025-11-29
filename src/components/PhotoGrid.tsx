@@ -1,24 +1,105 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { PhotoMetadata } from '../types';
+import { colors } from '../theme';
 
 const { width } = Dimensions.get('window');
 const COLUMNS = 3;
 const SPACING = 2;
-const ITEM_SIZE = (width - SPACING * (COLUMNS + 1)) / COLUMNS;
+const COLUMN_WIDTH = (width - SPACING * (COLUMNS + 1)) / COLUMNS;
 
 interface PhotoGridProps {
   photos: PhotoMetadata[];
   onPhotoPress?: (photo: PhotoMetadata) => void;
 }
 
+interface PhotoWithLayout extends PhotoMetadata {
+  displayHeight: number;
+  column: number;
+}
+
+/**
+ * Apple Photos-style grid with:
+ * - Fixed column widths (all photos same width)
+ * - Variable heights based on aspect ratio
+ * - Balanced column layout (shortest column gets next photo)
+ * - Dynamic dimension fetching for photos without metadata
+ */
 export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
+  const [photosWithLayout, setPhotosWithLayout] = useState<PhotoWithLayout[]>([]);
+
+  useEffect(() => {
+    calculateLayout();
+  }, [photos]);
+
+  const getImageHeight = async (photo: PhotoMetadata): Promise<number> => {
+    // If we have width and height metadata, use it
+    if (photo.width && photo.height) {
+      const aspectRatio = photo.width / photo.height;
+      const clampedRatio = Math.max(0.5, Math.min(2, aspectRatio));
+      return COLUMN_WIDTH / clampedRatio;
+    }
+
+    // Otherwise, fetch dimensions dynamically
+    return new Promise((resolve) => {
+      Image.getSize(
+        photo.uri,
+        (w, h) => {
+          const aspectRatio = w / h;
+          const clampedRatio = Math.max(0.5, Math.min(2, aspectRatio));
+          resolve(COLUMN_WIDTH / clampedRatio);
+        },
+        () => {
+          // Fallback to square if error
+          resolve(COLUMN_WIDTH);
+        }
+      );
+    });
+  };
+
+  const calculateLayout = async () => {
+    // Reset column heights
+    const heights = [0, 0, 0];
+    const layoutPhotos: PhotoWithLayout[] = [];
+
+    // Process photos sequentially to maintain order
+    for (const photo of photos) {
+      const displayHeight = await getImageHeight(photo);
+
+      // Find shortest column (balanced layout like Apple Photos)
+      const shortestColumnIndex = heights.indexOf(Math.min(...heights));
+      
+      // Assign photo to shortest column
+      layoutPhotos.push({
+        ...photo,
+        displayHeight,
+        column: shortestColumnIndex,
+      });
+
+      // Update column height
+      heights[shortestColumnIndex] += displayHeight + SPACING;
+    }
+
+    setPhotosWithLayout(layoutPhotos);
+  };
+
+  // Group photos by column
+  const columns: PhotoWithLayout[][] = [[], [], []];
+  photosWithLayout.forEach((photo) => {
+    columns[photo.column].push(photo);
+  });
+
   return (
     <View style={styles.container}>
-      {photos.map((photo) => (
+      {columns.map((columnPhotos, columnIndex) => (
+        <View key={columnIndex} style={styles.column}>
+          {columnPhotos.map((photo) => (
         <TouchableOpacity
           key={photo.id}
-          style={styles.item}
+              style={[
+                styles.item,
+                { height: photo.displayHeight }
+              ]}
           onPress={() => onPhotoPress?.(photo)}
           activeOpacity={0.8}
         >
@@ -28,6 +109,8 @@ export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
             resizeMode="cover"
           />
         </TouchableOpacity>
+          ))}
+        </View>
       ))}
     </View>
   );
@@ -36,18 +119,21 @@ export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     padding: SPACING,
+    gap: SPACING,
+  },
+  column: {
+    flex: 1,
+    gap: SPACING,
   },
   item: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    margin: SPACING / 2,
+    width: '100%',
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: colors.warm.tertiary,
   },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: 4,
   },
 });
-

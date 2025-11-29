@@ -31,16 +31,16 @@ function AutoIndexOnLaunch() {
 
 function TabNavigator() {
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
+            <Tab.Navigator
+              screenOptions={({ route }) => ({
+                headerShown: false,
         tabBarActiveTintColor: colors.warm.accent,
         tabBarInactiveTintColor: colors.text.tertiary,
-        tabBarStyle: {
-          position: 'absolute',
+                tabBarStyle: {
+                  position: 'absolute',
           backgroundColor: Platform.OS === 'ios' ? 'transparent' : 'rgba(255, 255, 255, 0.95)',
-          borderTopWidth: 0,
-          elevation: 0,
+                  borderTopWidth: 0,
+                  elevation: 0,
           height: spacing.bottomTab,
           paddingBottom: Platform.OS === 'ios' ? 20 : 8,
           paddingTop: 8,
@@ -68,21 +68,21 @@ function TabNavigator() {
         },
         tabBarItemStyle: {
           paddingVertical: 4,
-        },
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
+                },
+                tabBarIcon: ({ focused, color, size }) => {
+                  let iconName: keyof typeof Ionicons.glyphMap;
 
-          if (route.name === 'Gallery') {
-            iconName = focused ? 'images' : 'images-outline';
-          } else if (route.name === 'Explore') {
-            iconName = focused ? 'compass' : 'compass-outline';
-          } else if (route.name === 'Creative') {
+                  if (route.name === 'Gallery') {
+                    iconName = focused ? 'images' : 'images-outline';
+                  } else if (route.name === 'Explore') {
+                    iconName = focused ? 'compass' : 'compass-outline';
+                  } else if (route.name === 'Creative') {
             iconName = focused ? 'sparkles' : 'sparkles-outline';
-          } else if (route.name === 'Settings') {
-            iconName = focused ? 'settings' : 'settings-outline';
-          } else {
-            iconName = 'help';
-          }
+                  } else if (route.name === 'Settings') {
+                    iconName = focused ? 'settings' : 'settings-outline';
+                  } else {
+                    iconName = 'help';
+                  }
 
           return (
             <Ionicons 
@@ -95,30 +95,30 @@ function TabNavigator() {
               }}
             />
           );
-        },
-      })}
-    >
-      <Tab.Screen 
-        name="Gallery" 
-        component={GalleryScreen}
-        options={{ title: 'Gallery' }}
-      />
-      <Tab.Screen 
-        name="Explore" 
-        component={ExploreScreen}
-        options={{ title: 'Explore' }}
-      />
-      <Tab.Screen 
-        name="Creative" 
-        component={CreativeScreen}
+                },
+              })}
+            >
+              <Tab.Screen 
+                name="Gallery" 
+                component={GalleryScreen}
+                options={{ title: 'Gallery' }}
+              />
+              <Tab.Screen 
+                name="Explore" 
+                component={ExploreScreen}
+                options={{ title: 'Explore' }}
+              />
+              <Tab.Screen 
+                name="Creative" 
+                component={CreativeScreen}
         options={{ title: 'Create' }}
-      />
-      <Tab.Screen 
-        name="Settings" 
-        component={SettingsScreen}
-        options={{ title: 'Settings' }}
-      />
-    </Tab.Navigator>
+              />
+              <Tab.Screen 
+                name="Settings" 
+                component={SettingsScreen}
+                options={{ title: 'Settings' }}
+              />
+          </Tab.Navigator>
   );
 }
 

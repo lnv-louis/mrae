@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 
 class DatabaseService {
   private db: SQLite.SQLiteDatabase | null = null;
+  private inTransaction = false;
 
   async init(): Promise<void> {
     if (this.db) return;
@@ -112,17 +113,39 @@ class DatabaseService {
 
   async beginTransaction(): Promise<void> {
     if (!this.db) await this.init();
+    
+    // Prevent nested transactions
+    if (this.inTransaction) {
+      console.warn('⚠️ Transaction already active, skipping BEGIN');
+      return;
+    }
+    
     await this.db!.execAsync('BEGIN TRANSACTION');
+    this.inTransaction = true;
   }
 
   async commitTransaction(): Promise<void> {
     if (!this.db) await this.init();
+    
+    if (!this.inTransaction) {
+      console.warn('⚠️ No active transaction to commit');
+      return;
+    }
+    
     await this.db!.execAsync('COMMIT');
+    this.inTransaction = false;
   }
 
   async rollbackTransaction(): Promise<void> {
     if (!this.db) await this.init();
+    
+    if (!this.inTransaction) {
+      console.warn('⚠️ No active transaction to rollback');
+      return;
+    }
+    
     await this.db!.execAsync('ROLLBACK');
+    this.inTransaction = false;
   }
 
   async insertImageIndex(entry: {

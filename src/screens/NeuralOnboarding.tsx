@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
 import photoService from '../services/photoService';
@@ -9,17 +9,15 @@ import Animated, {
   useAnimatedStyle, 
   withTiming, 
   withRepeat, 
-  withSpring,
-  Easing,
+  withSequence, 
   FadeInDown,
   interpolate,
-  useDerivedValue,
   withDelay,
+  withSpring,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
-const PARTICLE_COUNT = 40;
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -32,12 +30,12 @@ const PulsingDot = () => {
 
   useEffect(() => {
     scale.value = withRepeat(
-      withTiming(1.5, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+      withTiming(1.5, { duration: 1000 }),
       -1,
       true
     );
     opacity.value = withRepeat(
-      withTiming(0.3, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+      withTiming(0.3, { duration: 1000 }),
       -1,
       true
     );
@@ -51,37 +49,62 @@ const PulsingDot = () => {
   return <Animated.View style={[styles.pulsingDot, animatedStyle]} />;
 };
 
-// 3D Particle component
-interface ParticleProps {
-  index: number;
-  progress: Animated.SharedValue<number>;
-}
-
-const Particle = ({ index, progress }: ParticleProps) => {
-  const angle = (index / PARTICLE_COUNT) * Math.PI * 2;
-  const radius = useSharedValue(0);
-  const rotation = useSharedValue(0);
-  const scale = useSharedValue(0);
+// Single elegant particle
+const ElegantParticle = ({ 
+  x,
+  y,
+  size,
+  delay,
+  duration,
+  amplitude,
+  color,
+}: { 
+  x: number;
+  y: number;
+  size: number;
+  delay: number;
+  duration: number;
+  amplitude: number;
+  color: string;
+}) => {
+  const translateX = useSharedValue(x);
+  const translateY = useSharedValue(y);
   const opacity = useSharedValue(0);
+  const scale = useSharedValue(0);
 
   useEffect(() => {
-    const delay = index * 50;
-    
-    // Spiral outward animation
-    radius.value = withDelay(
+    // Gentle sine wave motion
+    translateX.value = withDelay(
       delay,
       withRepeat(
-        withTiming(120, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+      withSequence(
+          withTiming(x + amplitude, { duration: duration / 2 }),
+          withTiming(x - amplitude, { duration: duration / 2 })
+      ),
+      -1,
+      true
+      )
+    );
+
+    // Float vertically
+    translateY.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(y - 50, { duration }),
         -1,
         true
       )
     );
 
-    // Rotation animation
-    rotation.value = withDelay(
+    // Fade in/out cycle
+    opacity.value = withDelay(
       delay,
       withRepeat(
-        withTiming(360, { duration: 8000, easing: Easing.linear }),
+        withSequence(
+          withTiming(0.8, { duration: duration * 0.2 }),
+          withTiming(0.8, { duration: duration * 0.6 }),
+          withTiming(0, { duration: duration * 0.2 })
+        ),
         -1,
         false
       )
@@ -91,108 +114,134 @@ const Particle = ({ index, progress }: ParticleProps) => {
     scale.value = withDelay(
       delay,
       withRepeat(
-        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withSequence(
+          withTiming(1.2, { duration: 1500 }),
+          withTiming(0.8, { duration: 1500 })
+        ),
         -1,
         true
-      )
-    );
-
-    // Fade in/out
-    opacity.value = withDelay(
-      delay,
-      withRepeat(
-        withTiming(0.8, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      )
+    )
     );
   }, []);
 
-  const animatedStyle = useAnimatedStyle(() => {
-    const currentRadius = interpolate(
-      progress.value,
-      [0, 1],
-      [0, radius.value]
-    );
-
-    const rotationRad = (rotation.value * Math.PI) / 180;
-    const x = Math.cos(angle + rotationRad) * currentRadius;
-    const y = Math.sin(angle + rotationRad) * currentRadius * 0.6; // Flatten for 3D perspective
-    const z = Math.sin(angle + rotationRad) * currentRadius * 0.4;
-
-    const size = interpolate(
-      z,
-      [-120, 120],
-      [3, 12]
-    );
-
-    const particleOpacity = interpolate(
-      z,
-      [-120, 0, 120],
-      [0.2, 0.6, 1]
-    ) * opacity.value;
-
-    return {
-      position: 'absolute',
-      width: size * scale.value,
-      height: size * scale.value,
-      borderRadius: (size * scale.value) / 2,
-      backgroundColor: colors.warm.accent,
-      opacity: particleOpacity,
-      transform: [
-        { translateX: x },
-        { translateY: y },
-      ],
-      shadowColor: colors.warm.accent,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.8,
-      shadowRadius: size,
-      elevation: z > 0 ? 5 : 1,
-    };
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    position: 'absolute' as const,
+    left: '50%',
+    top: '50%',
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    backgroundColor: color,
+    opacity: opacity.value,
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
 
   return <Animated.View style={animatedStyle} />;
 };
 
-// 3D Particle Field
-interface ParticleFieldProps {
-  progress: number;
-}
+// Particle colors - vibrant warm tones
+const PARTICLE_COLORS = [
+  '#FF6B4A', // Vibrant coral
+  '#FF8A65', // Warm coral
+  '#FFAB91', // Light coral
+  '#FFD4C4', // Soft peach
+  '#FFF0E8', // Cream
+  '#FFE0B2', // Light amber
+];
 
-const ParticleField = ({ progress }: ParticleFieldProps) => {
+// Main particle field - NO CIRCLES, just particles
+const ParticleField = ({ progress }: { progress: number }) => {
   const progressValue = useSharedValue(0);
 
   useEffect(() => {
     progressValue.value = withSpring(progress, {
-      damping: 15,
-      stiffness: 50,
+      damping: 20,
+      stiffness: 40,
     });
   }, [progress]);
 
-  const centerGlowStyle = useAnimatedStyle(() => {
-    const glowScale = interpolate(
-      progressValue.value,
-      [0, 0.5, 1],
-      [0.5, 1.2, 0.8]
-    );
+  // Generate MANY more particles in a flowing pattern
+  const particles = useMemo(() => {
+    const particleArray = [];
+    const layers = 8; // Multiple layers for depth
+    const particlesPerLayer = 20;
 
-    return {
-      transform: [{ scale: glowScale }],
-      opacity: interpolate(progressValue.value, [0, 1], [0.3, 0.6]),
-    };
-  });
+    for (let layer = 0; layer < layers; layer++) {
+      const layerRadius = 30 + layer * 20;
+      
+      for (let i = 0; i < particlesPerLayer; i++) {
+        const angle = (i / particlesPerLayer) * Math.PI * 2;
+        const x = Math.cos(angle) * layerRadius;
+        const y = Math.sin(angle) * layerRadius * 0.6; // Flatten for perspective
+        
+        particleArray.push({
+          id: `${layer}-${i}`,
+          x,
+          y,
+          size: 1 + Math.random() * 2.5, // Very small particles
+          delay: Math.random() * 3000,
+          duration: 4000 + Math.random() * 3000,
+          amplitude: 5 + Math.random() * 15,
+          color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
+        });
+      }
+    }
+
+    // Add random floating particles
+    for (let i = 0; i < 40; i++) {
+      particleArray.push({
+        id: `random-${i}`,
+        x: (Math.random() - 0.5) * 250,
+        y: (Math.random() - 0.5) * 250,
+        size: 1 + Math.random() * 2,
+        delay: Math.random() * 4000,
+        duration: 5000 + Math.random() * 4000,
+        amplitude: 3 + Math.random() * 10,
+        color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
+      });
+    }
+
+    return particleArray;
+  }, []);
+
+  // Animated progress wave effect
+  const waveOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    waveOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.3, { duration: 2000 }),
+        withTiming(0, { duration: 2000 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const waveStyle = useAnimatedStyle(() => ({
+    opacity: waveOpacity.value * progressValue.value,
+    transform: [
+      { scale: interpolate(progressValue.value, [0, 1], [0.5, 1.5]) }
+    ],
+  }));
 
   return (
     <View style={styles.particleContainer}>
-      {/* Central glow */}
-      <Animated.View style={[styles.centerGlow, centerGlowStyle]} />
+      {/* Progress wave rings */}
+      <Animated.View style={[styles.progressWave, waveStyle]} />
+      <Animated.View style={[styles.progressWave2, waveStyle]} />
       
-      {/* Particles */}
-      <View style={styles.particlesWrapper}>
-        {Array.from({ length: PARTICLE_COUNT }).map((_, i) => (
-          <Particle key={i} index={i} progress={progressValue} />
-        ))}
-      </View>
+      {/* Central subtle glow - NO ugly circles */}
+      <View style={styles.centerDot} />
+      
+      {/* All the particles */}
+      {particles.map((particle) => (
+        <ElegantParticle key={particle.id} {...particle} />
+      ))}
     </View>
   );
 };
@@ -202,7 +251,6 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
   const [indexingStats, setIndexingStats] = useState({ processed: 0, total: 0 });
   const [currentPhoto, setCurrentPhoto] = useState<string>('');
 
-  // Real indexing with actual photo processing
   useEffect(() => {
     if (step === 'indexing') {
       startRealIndexing();
@@ -220,14 +268,12 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
           setCurrentPhoto(progress.current);
         }
         
-        // Complete when done
-        if (progress.processed >= progress.total) {
+        if (progress.processed >= progress.total && progress.total > 0) {
           setTimeout(onComplete, 1500);
         }
       });
     } catch (error) {
       console.error('Indexing error:', error);
-      // Still complete onboarding even if indexing fails
       setTimeout(onComplete, 1500);
     }
   };
@@ -242,10 +288,10 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
   const progressPercentage = indexingStats.total > 0 
     ? indexingStats.processed / indexingStats.total 
     : 0;
-
+  
   const renderContent = () => {
-    if (step === 'welcome') {
-      return (
+  if (step === 'welcome') {
+    return (
         <View style={styles.content}>
           <Animated.Text entering={FadeInDown.duration(1000).springify()} style={styles.title}>
             MRAE
@@ -260,14 +306,14 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
             <TouchableOpacity style={styles.minimalButton} onPress={() => setStep('connect')}>
               <Text style={styles.minimalButtonText}>Enter</Text>
               <Ionicons name="arrow-forward" size={16} color={colors.warm.accent} />
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      );
-    }
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    );
+  }
 
-    if (step === 'connect') {
-      return (
+  if (step === 'connect') {
+    return (
         <View style={styles.content}>
           <Animated.Text entering={FadeInDown.duration(800)} style={styles.sectionTitle}>
             Connect
@@ -276,28 +322,27 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
             Link your visual history to begin.
           </Animated.Text>
 
-          <View style={styles.optionsContainer}>
+        <View style={styles.optionsContainer}>
             <TouchableOpacity style={styles.minimalOptionCard} onPress={handleConnectLocal}>
               <View style={styles.optionIconCircle}>
                 <Ionicons name="images-outline" size={24} color={colors.warm.accent} />
               </View>
-              <View style={styles.optionText}>
+            <View style={styles.optionText}>
                 <Text style={styles.optionTitle}>Photos</Text>
                 <Text style={styles.optionDesc}>Local Gallery</Text>
-              </View>
+            </View>
               <Ionicons name="add" size={24} color={colors.text.tertiary} />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
-      );
-    }
+      </View>
+    );
+  }
 
-    return ( // Indexing step with 3D particles
+  return (
       <View style={styles.contentCenter}>
         <ParticleField progress={progressPercentage} />
         
         <View style={styles.statsContainer}>
-          {/* Large Percentage Display */}
           <Animated.View 
             style={styles.percentageContainer}
             key={`percentage-${Math.round(progressPercentage * 100)}`}
@@ -309,14 +354,12 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
             <Text style={styles.percentageSymbol}>%</Text>
           </Animated.View>
           
-          {/* Photo Count */}
           <Text style={styles.statLabel}>
             {indexingStats.total > 0 
               ? `${indexingStats.processed} of ${indexingStats.total} photos` 
               : 'initializing neural pathways...'}
           </Text>
           
-          {/* Status Message */}
           {indexingStats.total > 0 && (
             <View style={styles.statusBadge}>
               <PulsingDot />
@@ -454,25 +497,33 @@ const styles = StyleSheet.create({
     height: 300,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xl,
   },
-  particlesWrapper: {
-    width: 300,
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  centerGlow: {
+  // Subtle central dot - NO ugly circles
+  centerDot: {
     position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.warm.primary,
-    shadowColor: colors.warm.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 40,
-    elevation: 10,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.warm.accent,
+    opacity: 0.6,
+  },
+  // Progress wave rings
+  progressWave: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 110, 64, 0.15)',
+  },
+  progressWave2: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 110, 64, 0.1)',
   },
   statsContainer: {
     alignItems: 'center',

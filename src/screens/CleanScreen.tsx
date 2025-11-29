@@ -64,19 +64,19 @@ export default function CleanScreen() {
   }
 
   if (photos.length === 0) {
-    return (
-      <ScreenLayout>
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Smart Cleaner</Text>
+  return (
+    <ScreenLayout>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Smart Cleaner</Text>
             <Text style={styles.subtitle}>All clean!</Text>
-          </View>
-          <BlurView intensity={20} style={styles.card}>
+        </View>
+        <BlurView intensity={20} style={styles.card}>
             <Text style={styles.emptyText}>
               No photos to clean 🎉
-            </Text>
-          </BlurView>
-        </View>
+          </Text>
+        </BlurView>
+      </View>
       </ScreenLayout>
     );
   }

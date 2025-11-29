@@ -125,47 +125,47 @@ export default function CreativeScreen() {
   };
 
   if (mode === 'select') {
-    return (
-      <ScreenLayout>
-        <View style={styles.container}>
-          <View style={styles.header}>
+  return (
+    <ScreenLayout>
+      <View style={styles.container}>
+        <View style={styles.header}>
             <Text style={styles.title}>Drawing Tools</Text>
             <Text style={styles.subtitle}>Edit & Analyze with AI</Text>
-          </View>
+        </View>
 
-          <BlurView intensity={20} style={styles.glassCard}>
-            <View style={styles.iconPlaceholder}>
+        <BlurView intensity={20} style={styles.glassCard}>
+          <View style={styles.iconPlaceholder}>
               <Ionicons name="brush" size={40} color={colors.neutral.white} />
-            </View>
+          </View>
             <Text style={styles.cardTitle}>Draw on Photos</Text>
-            <Text style={styles.cardDescription}>
+          <Text style={styles.cardDescription}>
               Select a photo, draw your edits, and let AI analyze the changes.
-            </Text>
+          </Text>
             <TouchableOpacity 
               style={styles.button}
               onPress={handleSelectImage}
             >
               <Text style={styles.buttonText}>Select Photo</Text>
-            </TouchableOpacity>
-          </BlurView>
+          </TouchableOpacity>
+        </BlurView>
 
-          <View style={styles.toolsContainer}>
-            <BlurView intensity={20} style={styles.toolCard}>
+        <View style={styles.toolsContainer}>
+          <BlurView intensity={20} style={styles.toolCard}>
               <Text style={styles.toolIcon}>✏️</Text>
               <Text style={styles.toolName}>Draw</Text>
-            </BlurView>
-            <BlurView intensity={20} style={styles.toolCard}>
+          </BlurView>
+          <BlurView intensity={20} style={styles.toolCard}>
               <Text style={styles.toolIcon}>🎨</Text>
               <Text style={styles.toolName}>Colors</Text>
-            </BlurView>
-            <BlurView intensity={20} style={styles.toolCard}>
+          </BlurView>
+          <BlurView intensity={20} style={styles.toolCard}>
               <Text style={styles.toolIcon}>🤖</Text>
               <Text style={styles.toolName}>AI Diff</Text>
-            </BlurView>
-          </View>
+          </BlurView>
         </View>
-      </ScreenLayout>
-    );
+      </View>
+    </ScreenLayout>
+  );
   }
 
   if (mode === 'draw') {
