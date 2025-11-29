@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import geminiService from './geminiService';
 
 /**
@@ -78,14 +79,42 @@ class ImageEditingService {
     }
 
     try {
-      // Convert image URI to base64 or file path
-      let imageData: string;
-      let imageFormat = 'image/jpeg';
+      // Resize image to prevent token overflow (OpenRouter has 65k token limit)
+      // Large images can easily exceed this, so we resize to max 1024x1024
+      let processedImageUri = imageUri;
 
-      if (imageUri.startsWith('file://') || imageUri.startsWith('http')) {
+      try {
+        console.log('📐 Resizing image to prevent API token overflow...');
+
+        const manipResult = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [
+            {
+              resize: {
+                width: 384, // Aggressive resize to stay under 65k token limit (512px was still too large)
+              }
+            }
+          ],
+          {
+            compress: 0.4, // Aggressive compression for token budget
+            format: ImageManipulator.SaveFormat.JPEG,
+          }
+        );
+
+        processedImageUri = manipResult.uri;
+        console.log('✅ Image resized for API compatibility');
+      } catch (resizeError: any) {
+        console.warn('⚠️ Image resize failed, using original (may cause token overflow):', resizeError);
+      }
+
+      // Convert image URI to base64
+      let imageData: string;
+      const imageFormat = 'image/jpeg';
+
+      if (processedImageUri.startsWith('file://') || processedImageUri.startsWith('http')) {
         try {
           // Check if file exists first
-          const fileInfo = await FileSystem.getInfoAsync(imageUri);
+          const fileInfo = await FileSystem.getInfoAsync(processedImageUri);
           if (!fileInfo.exists) {
             return {
               success: false,
@@ -94,7 +123,7 @@ class ImageEditingService {
           }
 
           // Read file as base64
-          const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          const base64 = await FileSystem.readAsStringAsync(processedImageUri, {
             encoding: FileSystem.EncodingType.Base64,
           });
 
@@ -107,9 +136,12 @@ class ImageEditingService {
 
           imageData = base64;
 
-          // Detect format
-          if (imageUri.toLowerCase().endsWith('.png')) {
-            imageFormat = 'image/png';
+          // Log size for debugging
+          const estimatedTokens = Math.ceil(base64.length / 4);
+          console.log(`📊 Image size: ~${(base64.length / 1024).toFixed(1)}KB base64, ~${estimatedTokens.toLocaleString()} tokens`);
+
+          if (estimatedTokens > 50000) {
+            console.warn('⚠️ WARNING: Image still very large after resize, may exceed API limits');
           }
         } catch (fileError: any) {
           console.error('❌ File read error:', fileError);
@@ -164,17 +196,20 @@ class ImageEditingService {
         };
       }
 
-      console.log('✅ AI analysis complete:', aiResponse);
+      console.log('✅ AI analysis complete');
 
-      // For now, return the original image with AI analysis
-      // In a production app, you would use the AI response to guide actual image editing
-      // using a library like react-native-image-editor or react-native-canvas
-      console.log('⚠️ Note: Full image editing capabilities require additional image processing libraries');
-      console.log('📝 AI Suggestion:', aiResponse);
+      // IMPORTANT: OpenRouter/Gemini can only ANALYZE images, not EDIT them
+      // For actual image editing, you would need:
+      // 1. Image generation API (Replicate + Stable Diffusion)
+      // 2. Client-side image manipulation (react-native-canvas, expo-gl)
+      // 3. Or upload to a proper image editing service
+
+      console.log('ℹ️ OpenRouter provides image analysis only, not editing');
+      console.log('📝 AI Analysis:', aiResponse.substring(0, 200));
 
       return {
         success: false,
-        error: `Image editing feature requires additional setup. AI suggested: ${aiResponse.substring(0, 200)}...`
+        error: `⚠️ Image editing not implemented.\n\nOpenRouter/Gemini can only analyze images, not edit them. To implement image editing, you would need:\n\n• Image generation API (e.g., Replicate with Stable Diffusion)\n• Or client-side manipulation libraries\n\nAI Analysis: ${aiResponse.substring(0, 150)}...`
       };
     } catch (error: any) {
       console.error('❌ Image editing error:', error);

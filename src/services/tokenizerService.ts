@@ -56,8 +56,6 @@ class TokenizerService {
 
     // Skip loading tokenizer.json on mobile - it's 45MB and causes OOM
     // The fallback tokenizer works well enough for search
-    console.log('⚠️ Skipping tokenizer.json load (45MB file causes OOM on mobile)');
-    console.log('💡 Using fallback tokenization instead (word-based hashing)');
     return false;
 
     /* COMMENTED OUT - Causes OOM on mobile
@@ -299,7 +297,6 @@ class TokenizerService {
     addEos: boolean = true
   ): { input_ids: number[]; attention_mask: number[] } {
     if (!this.isLoaded) {
-      console.warn('⚠️ Tokenizer not loaded, using fallback');
       return this.fallbackTokenize(text, maxLength);
     }
 
@@ -347,8 +344,6 @@ class TokenizerService {
     text: string,
     maxLength: number
   ): { input_ids: number[]; attention_mask: number[] } {
-    console.warn('⚠️ Using fallback tokenization (word hashing)');
-
     // Normalize and split text
     const words = text
       .toLowerCase()

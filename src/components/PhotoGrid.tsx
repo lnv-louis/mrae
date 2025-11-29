@@ -1,116 +1,49 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { PhotoMetadata } from '../types';
 import { colors } from '../theme';
 
 const { width } = Dimensions.get('window');
 const COLUMNS = 3;
 const SPACING = 2;
-const COLUMN_WIDTH = (width - SPACING * (COLUMNS + 1)) / COLUMNS;
+const ITEM_SIZE = (width - SPACING * (COLUMNS + 1)) / COLUMNS;
 
 interface PhotoGridProps {
   photos: PhotoMetadata[];
   onPhotoPress?: (photo: PhotoMetadata) => void;
 }
 
-interface PhotoWithLayout extends PhotoMetadata {
-  displayHeight: number;
-  column: number;
-}
-
 /**
- * Apple Photos-style grid with:
- * - Fixed column widths (all photos same width)
- * - Variable heights based on aspect ratio
- * - Balanced column layout (shortest column gets next photo)
- * - Dynamic dimension fetching for photos without metadata
+ * High-performance photo grid with progressive loading
+ * Uses FlashList for:
+ * - Progressive rendering as user scrolls
+ * - Efficient memory usage
+ * - Smooth 60fps scrolling
+ * - Automatic viewport optimization
  */
 export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
-  const [photosWithLayout, setPhotosWithLayout] = useState<PhotoWithLayout[]>([]);
+  const handlePhotoPress = useCallback(
+    (photo: PhotoMetadata) => {
+      onPhotoPress?.(photo);
+    },
+    [onPhotoPress]
+  );
 
-  const getImageHeight = useCallback(async (photo: PhotoMetadata): Promise<number> => {
-    // If we have width and height metadata, use it
-    if (photo.width && photo.height) {
-      const aspectRatio = photo.width / photo.height;
-      const clampedRatio = Math.max(0.5, Math.min(2, aspectRatio));
-      return COLUMN_WIDTH / clampedRatio;
-    }
+  const renderItem = useCallback(
+    ({ item: photo }: { item: PhotoMetadata }) => {
+      // Calculate height based on aspect ratio if available
+      let itemHeight = ITEM_SIZE; // Default to square
 
-    // Otherwise, fetch dimensions dynamically
-    return new Promise((resolve) => {
-      Image.getSize(
-        photo.uri,
-        (w, h) => {
-          const aspectRatio = w / h;
-          const clampedRatio = Math.max(0.5, Math.min(2, aspectRatio));
-          resolve(COLUMN_WIDTH / clampedRatio);
-        },
-        () => {
-          // Fallback to square if error
-          resolve(COLUMN_WIDTH);
-        }
-      );
-    });
-  }, []);
+      if (photo.width && photo.height) {
+        const aspectRatio = photo.width / photo.height;
+        const clampedRatio = Math.max(0.5, Math.min(2, aspectRatio));
+        itemHeight = ITEM_SIZE / clampedRatio;
+      }
 
-  const calculateLayout = useCallback(async () => {
-    // Reset column heights
-    const heights = [0, 0, 0];
-    const layoutPhotos: PhotoWithLayout[] = [];
-
-    // ✅ PARALLEL LOADING: Fetch all image heights at once (80-90% faster!)
-    const heightPromises = photos.map(photo => getImageHeight(photo));
-    const displayHeights = await Promise.all(heightPromises);
-
-    // Process photos with pre-fetched heights to maintain order
-    displayHeights.forEach((displayHeight, index) => {
-      const photo = photos[index];
-
-      // Find shortest column (balanced layout like Apple Photos)
-      const shortestColumnIndex = heights.indexOf(Math.min(...heights));
-
-      // Assign photo to shortest column
-      layoutPhotos.push({
-        ...photo,
-        displayHeight,
-        column: shortestColumnIndex,
-      });
-
-      // Update column height
-      heights[shortestColumnIndex] += displayHeight + SPACING;
-    });
-
-    setPhotosWithLayout(layoutPhotos);
-  }, [photos, getImageHeight]);
-
-  useEffect(() => {
-    calculateLayout();
-  }, [calculateLayout]);
-
-  // Memoize column grouping
-  const columns = useMemo(() => {
-    const cols: PhotoWithLayout[][] = [[], [], []];
-    photosWithLayout.forEach((photo) => {
-      cols[photo.column].push(photo);
-    });
-    return cols;
-  }, [photosWithLayout]);
-
-  const handlePhotoPress = useCallback((photo: PhotoMetadata) => {
-    onPhotoPress?.(photo);
-  }, [onPhotoPress]);
-
-  return (
-    <View style={styles.container}>
-      {columns.map((columnPhotos, columnIndex) => (
-        <View key={columnIndex} style={styles.column}>
-          {columnPhotos.map((photo) => (
+      return (
         <TouchableOpacity
-          key={photo.id}
-              style={[
-                styles.item,
-                { height: photo.displayHeight }
-              ]}
+          style={[styles.item, { height: itemHeight }]}
           onPress={() => handlePhotoPress(photo)}
           activeOpacity={0.8}
         >
@@ -118,27 +51,68 @@ export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
             source={{ uri: photo.uri }}
             style={styles.image}
             resizeMode="cover"
+            // Progressive loading for better UX
+            progressiveRenderingEnabled={true}
+            fadeDuration={100}
           />
         </TouchableOpacity>
-          ))}
-        </View>
-      ))}
-    </View>
+      );
+    },
+    [handlePhotoPress]
+  );
+
+  const keyExtractor = useCallback((item: PhotoMetadata) => item.id, []);
+
+  // Memoize estimated item size for FlashList optimization
+  const getItemType = useCallback(
+    (item: PhotoMetadata) => {
+      // Group items by similar aspect ratios for better recycling
+      if (!item.width || !item.height) return 'square';
+      const ratio = item.width / item.height;
+      if (ratio > 1.3) return 'landscape';
+      if (ratio < 0.7) return 'portrait';
+      return 'square';
+    },
+    []
+  );
+
+  return (
+    <FlashList
+      data={photos}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      estimatedItemSize={ITEM_SIZE}
+      numColumns={COLUMNS}
+      // Progressive rendering settings
+      drawDistance={400} // Load items 400px ahead
+      estimatedFirstItemOffset={0}
+      // Performance optimizations
+      getItemType={getItemType}
+      // Styling
+      contentContainerStyle={styles.contentContainer}
+      columnWrapperStyle={styles.row}
+      showsVerticalScrollIndicator={false}
+      // Better scrolling performance
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={15}
+      updateCellsBatchingPeriod={50}
+      initialNumToRender={12}
+      windowSize={5}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    padding: SPACING,
-    gap: SPACING,
+  contentContainer: {
+    paddingHorizontal: SPACING,
+    paddingTop: SPACING,
   },
-  column: {
-    flex: 1,
+  row: {
     gap: SPACING,
+    marginBottom: SPACING,
   },
   item: {
-    width: '100%',
+    width: ITEM_SIZE,
     borderRadius: 4,
     overflow: 'hidden',
     backgroundColor: colors.warm.tertiary,

@@ -124,16 +124,42 @@ export default function GalleryScreen({ navigation }: any) {
     navigation.navigate('PhotoDetail', { photoId: photo.id, uri: photo.uri });
   }, [navigation]);
 
-  const handleCategorize = async () => {
+  const handleAutoCategorize = async () => {
+    setLoading(true);
+    try {
+      console.log('🎨 Starting auto-categorization...');
+      const res = await categorizationService.autoCategorizeAllImages();
+
+      // Reload categories from database
+      await loadCategories();
+      setViewMode('categories');
+
+      Alert.alert(
+        '✨ Categorization Complete!',
+        res.message + '\n\nYour photos are now organized by mood, color, and aesthetics.',
+        [{ text: 'View Categories', onPress: () => setViewMode('categories') }]
+      );
+    } catch (error: any) {
+      console.error('Auto-categorization error:', error);
+      Alert.alert(
+        'Categorization Failed',
+        error?.message || 'Failed to auto-categorize photos. Make sure images are indexed first.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManualCategorize = async () => {
     Alert.prompt(
-      'Smart Categorize',
-      'Enter a theme (e.g. "nature", "city", "people")',
+      'Custom Categories',
+      'Enter themes (e.g. "nature, city, food, pets")',
       async (text) => {
         if (!text) return;
         setLoading(true);
         try {
           const res = await categorizationService.categorizeAllImagesFromPrompt(text);
-          // Reload categories from database to get all labels
           await loadCategories();
           setViewMode('categories');
           Alert.alert('Success', res.message);
@@ -232,11 +258,23 @@ export default function GalleryScreen({ navigation }: any) {
           <Ionicons name="sparkles-outline" size={48} color={colors.warm.accent} style={{ marginBottom: spacing.m }} />
           <Text style={styles.emptyTitle}>AI Smart Categories</Text>
           <Text style={styles.emptyText}>
-            Discover your photos organized by mood, color, and aesthetics
+            Automatically organize your photos by mood, color, and aesthetics
           </Text>
-          <TouchableOpacity style={styles.createButton} onPress={handleCategorize}>
+
+          {/* Auto-Categorize - Primary CTA */}
+          <TouchableOpacity style={styles.createButton} onPress={handleAutoCategorize}>
             <Ionicons name="sparkles" size={16} color="#fff" style={{ marginRight: 6 }} />
-            <Text style={styles.createButtonText}>Create Categories</Text>
+            <Text style={styles.createButtonText}>Auto-Categorize Photos</Text>
+          </TouchableOpacity>
+
+          {/* Manual Categorize - Secondary option */}
+          <TouchableOpacity
+            style={[styles.createButton, styles.secondaryButton]}
+            onPress={handleManualCategorize}
+          >
+            <Text style={[styles.createButtonText, styles.secondaryButtonText]}>
+              Custom Categories...
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -314,6 +352,11 @@ export default function GalleryScreen({ navigation }: any) {
         {!isDrillDown && viewMode === 'all' && (
           <TouchableOpacity style={styles.headerAction} onPress={() => setIsCleanupMode(true)}>
             <Ionicons name="brush-outline" size={20} color={colors.warm.accent} />
+          </TouchableOpacity>
+        )}
+        {!isDrillDown && viewMode === 'categories' && categories.length > 0 && (
+          <TouchableOpacity style={styles.headerAction} onPress={handleAutoCategorize}>
+            <Ionicons name="refresh" size={20} color={colors.warm.accent} />
           </TouchableOpacity>
         )}
       </View>
@@ -624,12 +667,23 @@ const styles = StyleSheet.create({
     elevation: 4,
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: spacing.m,
   },
   createButtonText: {
     color: colors.neutral.white,
     fontWeight: '700',
     fontSize: 15,
     letterSpacing: 0.3,
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.warm.accent,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  secondaryButtonText: {
+    color: colors.warm.accent,
   },
   fullscreenModal: {
     flex: 1,

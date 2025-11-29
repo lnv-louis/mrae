@@ -53,16 +53,25 @@ class TranscriptionService {
         });
       }
 
-      // Download the model if not already downloaded
+      // Download the model first (required before init)
       console.log('Downloading STT model...');
-      await this.sttModel.download({
-        onProgress: (progress) => {
-          console.log(`STT model download: ${Math.round(progress * 100)}%`);
-          onProgress?.(progress);
-        },
-      });
+      try {
+        await this.sttModel.download({
+          onProgress: (progress) => {
+            console.log(`STT model download: ${Math.round(progress * 100)}%`);
+            onProgress?.(progress);
+          },
+        });
+        console.log('✅ STT model downloaded');
+      } catch (downloadError: any) {
+        // If already downloaded, this is not an error
+        if (!downloadError?.message?.includes('already downloaded')) {
+          throw downloadError;
+        }
+        console.log('STT model already downloaded');
+      }
 
-      // Initialize the model
+      // Initialize the model after download
       console.log('Initializing STT model...');
       await this.sttModel.init();
 
@@ -70,72 +79,58 @@ class TranscriptionService {
       this.isDownloading = false;
       console.log('✅ STT model ready!');
       return true;
-    } catch (error) {
-      console.error('Failed to initialize STT model:', error);
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      console.error('Failed to initialize STT model:', {
+        error: errorMsg,
+        model: this.modelName,
+      });
       this.isDownloading = false;
       this.ready = false;
       return false;
-  }
+    }
   }
 
   /**
    * Transcribe audio to text
-   * 
+   *
    * @param audioFilePath - Path to audio file
    * @param onToken - Optional callback for streaming tokens
-   * @param language - Language code (e.g., 'en', 'es', 'fr')
+   * @param language - Language code (e.g., 'en', 'es', 'fr', 'de', 'zh')
    */
   async transcribe(
     audioFilePath: string,
     onToken?: (token: string) => void,
     language: string = 'en'
   ): Promise<{ response: string; success: boolean }> {
+    // Validate audio file path first
+    if (!audioFilePath || typeof audioFilePath !== 'string') {
+      throw new Error('Invalid audio file path provided');
+    }
+
     // Auto-initialize if not ready
     if (!this.ready) {
       const success = await this.initialize();
       if (!success) {
-        console.warn('⚠️ Using mock transcription (STT not available)');
-        return {
-          response: 'Transcription not available. Please ensure audio file is valid.',
-          success: false,
-        };
+        throw new Error('STT model initialization failed. Please ensure Cactus STT is properly configured.');
       }
     }
 
     if (!this.sttModel) {
-      return {
-        response: 'STT model not initialized',
-        success: false,
-      };
+      throw new Error('STT model not initialized. Call initialize() first.');
     }
 
     try {
-      console.log(`Transcribing audio: ${audioFilePath}`);
-      
-      // Validate audio file path
-      if (!audioFilePath || typeof audioFilePath !== 'string') {
-        console.error('Invalid audio file path:', audioFilePath);
-        return {
-          response: 'Invalid audio file path',
-          success: false,
-        };
-      }
+      console.log(`🎤 Transcribing: ${audioFilePath.split('/').pop()}`);
+      console.log(`   Language: ${language}, Model ready: ${this.ready}`);
 
-      // Ensure model is ready before transcribing
-      if (!this.ready || !this.sttModel) {
-        console.warn('STT model not ready, initializing...');
-        const initSuccess = await this.initialize();
-        if (!initSuccess || !this.sttModel) {
-          return {
-            response: 'STT model not available',
-            success: false,
-          };
-        }
-      }
-      
+      // Use Whisper's standard prompt format
+      // Format: <|startoftranscript|><|LANG|><|transcribe|><|notimestamps|>
+      const whisperPrompt = `<|startoftranscript|><|${language}|><|transcribe|><|notimestamps|>`;
+
       const result = await this.sttModel.transcribe({
         audioFilePath,
-        prompt: `Transcribe this audio in ${language}`,
+        prompt: whisperPrompt,
         onToken,
         options: {
           temperature: 0.0, // Deterministic for transcription
@@ -144,34 +139,56 @@ class TranscriptionService {
       });
 
       if (!result || !result.response) {
-        console.warn('Transcription returned empty result');
-        return {
-          response: 'No transcription result',
-          success: false,
-        };
+        throw new Error('Cactus STT returned empty result. The audio file may be invalid, corrupted, or too short.');
       }
 
-      console.log('✅ Audio transcribed successfully');
+      const responseText = result.response.trim();
+      console.log(`✅ Transcribed (${result.totalTokens} tokens, ${Math.round(result.tokensPerSecond)} tok/s): "${responseText.substring(0, 50)}${responseText.length > 50 ? '...' : ''}"`);
+
       return {
-        response: result.response,
+        response: responseText,
         success: true,
       };
     } catch (error: any) {
-      console.error('Transcription failed:', error);
-      const errorMsg = error?.message || String(error) || '';
-      
-      // Provide more helpful error messages
-      if (errorMsg.includes('file') || errorMsg.includes('path')) {
-        return {
-          response: 'Audio file not found or invalid',
-          success: false,
-        };
+      // Log detailed error for debugging
+      const errorMsg = error?.message || String(error) || 'Unknown error';
+      const errorStack = error?.stack || '';
+
+      console.error('❌ Cactus transcription error:', {
+        message: errorMsg,
+        audioPath: audioFilePath,
+        audioFileName: audioFilePath.split('/').pop(),
+        modelReady: this.ready,
+        modelName: this.modelName,
+        stack: errorStack.substring(0, 200),
+      });
+
+      // Provide specific error messages based on error type
+      if (errorMsg.toLowerCase().includes('file not found') ||
+          errorMsg.toLowerCase().includes('enoent') ||
+          errorMsg.toLowerCase().includes('no such file')) {
+        throw new Error(`Audio file not found at path: ${audioFilePath.split('/').pop()}`);
       }
-      
-      return {
-        response: 'Failed to transcribe audio. Please try again.',
-        success: false,
-      };
+
+      if (errorMsg.toLowerCase().includes('invalid format') ||
+          errorMsg.toLowerCase().includes('codec') ||
+          errorMsg.toLowerCase().includes('unsupported') ||
+          errorMsg.toLowerCase().includes('decode')) {
+        throw new Error(`Invalid or unsupported audio format. Cactus STT works best with WAV files. Current file: ${audioFilePath.split('/').pop()}`);
+      }
+
+      if (errorMsg.toLowerCase().includes('model') ||
+          errorMsg.toLowerCase().includes('not initialized') ||
+          errorMsg.toLowerCase().includes('not downloaded')) {
+        throw new Error('STT model error. The model may not be properly downloaded or initialized. Try restarting the app.');
+      }
+
+      if (errorMsg.toLowerCase().includes('timeout')) {
+        throw new Error('Transcription timed out. The audio file may be too long or the device may be under heavy load.');
+      }
+
+      // Re-throw with detailed error message
+      throw new Error(`Cactus transcription failed: ${errorMsg}`);
     }
   }
 

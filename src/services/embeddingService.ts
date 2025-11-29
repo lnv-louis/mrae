@@ -22,6 +22,8 @@ import geminiService from './geminiService';
 class EmbeddingService {
   private initializingText = false;
   private initializingImage = false;
+  private textInitAttempted = false;
+  private usingFallback = false;
 
   /**
    * Initialize text embedding model (LAZY LOADED)
@@ -32,26 +34,31 @@ class EmbeddingService {
    */
   async initializeTextModel(onProgress?: (progress: number) => void): Promise<void> {
     if (this.initializingText) {
-      console.log('Text model already initializing');
+      return;
+    }
+
+    if (this.textInitAttempted) {
       return;
     }
 
     this.initializingText = true;
+    this.textInitAttempted = true;
 
     try {
-      console.log('Initializing Text Embedding Model (SigLIP-2 ONNX) - LAZY LOAD...');
+      console.log('🔧 Initializing Text Embedding Model (SigLIP-2 ONNX)...');
 
       const success = await onnxService.initialize();
 
       if (success) {
-        console.log('✅ Text model initialized (SigLIP-2)');
+        console.log('✅ Text model ready (SigLIP-2)');
         onProgress?.(1.0);
       } else {
-        console.log('⚠️ Text model initialization failed, will use fallback (mock)');
+        this.usingFallback = true;
+        console.log('ℹ️ Using fallback text embeddings (search will still work)');
       }
     } catch (error) {
+      this.usingFallback = true;
       console.error('Text model error:', error);
-      console.log('💡 Using fallback for text embeddings (mock)');
     } finally {
       this.initializingText = false;
     }
@@ -104,19 +111,18 @@ class EmbeddingService {
     if (onnxService.available()) {
       const embedding = await onnxService.embedText(text);
       if (embedding && embedding.length > 0) {
-        console.log(`✅ Text embedded locally with ONNX (${embedding.length}D)`);
         return { embedding, success: true };
       }
-    } else {
-      // Auto-initialize if not ready
-      console.log('Auto-initializing ONNX text model...');
+    } else if (!this.textInitAttempted) {
+      // Auto-initialize if not ready and not yet attempted
       await this.initializeTextModel();
-      
-      // Retry after initialization
-      const embedding = await onnxService.embedText(text);
-      if (embedding && embedding.length > 0) {
-        console.log(`✅ Text embedded locally with ONNX (${embedding.length}D)`);
-        return { embedding, success: true };
+
+      // Retry after initialization - check if it's now available
+      if (onnxService.available()) {
+        const embedding = await onnxService.embedText(text);
+        if (embedding && embedding.length > 0) {
+          return { embedding, success: true };
+        }
       }
     }
 

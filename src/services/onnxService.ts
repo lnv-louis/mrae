@@ -39,22 +39,13 @@ class OnnxService {
    */
   async initialize(): Promise<boolean> {
     if (this.isReady) {
-      console.log('✅ ONNX service already initialized');
       return true;
     }
 
     try {
-      console.log('🔧 Loading SigLIP-2 text encoder and tokenizer...');
-
       // Initialize the BPE tokenizer first
       const tokenizerLoaded = await tokenizerService.initialize();
-      if (tokenizerLoaded) {
-        this.tokenizerReady = true;
-        console.log('✅ BPE Tokenizer initialized successfully');
-      } else {
-        console.warn('⚠️ BPE Tokenizer failed to load, will use fallback');
-        this.tokenizerReady = false;
-      }
+      this.tokenizerReady = tokenizerLoaded;
 
       // Use the safer loader from onnxModelLoader which has better error handling
       // This avoids the "Cannot read property 'install' of null" error by checking
@@ -66,57 +57,28 @@ class OnnxService {
         const onnxruntime = tryLoadOnnxRuntime();
 
         if (!onnxruntime) {
-          console.log('ℹ️ ONNX Runtime not available - using fallback embeddings');
-          console.log('💡 Fallback mode uses deterministic word-based embeddings');
-          console.log('💡 Search will still work, just with slightly lower accuracy');
-          console.log('💡 To enable native ONNX: rebuild app with native module');
           return false;
         }
 
         // Check if InferenceSession exists
         if (!onnxruntime.InferenceSession || typeof onnxruntime.InferenceSession !== 'function') {
-          console.warn('⚠️ ONNX Runtime InferenceSession not available');
           return false;
         }
-
-        console.log('✅ ONNX Runtime loaded successfully');
 
         // Try to load the model
         this.session = await loadTextEncoder();
 
         if (!this.session) {
-          console.warn('⚠️ Failed to load ONNX session, using mock embeddings');
           return false;
         }
 
         this.isReady = true;
-        const tokenizerStatus = this.tokenizerReady ? 'BPE tokenizer' : 'fallback tokenizer';
-        console.log(`✅ SigLIP-2 text encoder ready with ${tokenizerStatus}!`);
         return true;
       } catch (error: any) {
         // Catch errors from import or model loading
-        const errorMsg = error?.message || String(error) || '';
-        const errorStack = error?.stack || '';
-        const fullError = (errorMsg + ' ' + errorStack).toLowerCase();
-        
-        // Check for the specific "install" or "null" errors
-        if (fullError.includes('install') || 
-            fullError.includes('null') || 
-            fullError.includes('cannot read property') ||
-            fullError.includes('undefined') ||
-            fullError.includes('native module')) {
-          console.warn('⚠️ ONNX Runtime native module not initialized');
-          console.log('💡 This usually means the native module needs to be rebuilt.');
-          console.log('💡 Try: cd android && ./gradlew clean && cd .. && npm run android');
-        } else {
-          console.warn('⚠️ Error loading ONNX model:', errorMsg);
-        }
-        console.log('Using mock embeddings for text queries');
         return false;
       }
     } catch (error: any) {
-      console.error('❌ Failed to initialize ONNX service:', error?.message || error);
-      console.log('Falling back to mock embeddings');
       this.isReady = false;
       return false;
     }
@@ -141,13 +103,12 @@ class OnnxService {
       // Try to initialize if not ready
       const initialized = await this.initialize();
       if (!initialized) {
-        console.warn('⚠️ ONNX service not available, using mock');
+        // Initialization warnings already logged, just return fallback
         return this.mockEmbed(text);
       }
     }
 
     if (!this.session) {
-      console.warn('⚠️ ONNX session not available');
       return this.mockEmbed(text);
     }
 
@@ -158,22 +119,12 @@ class OnnxService {
 
       // Validate tokenization output
       if (!tokens || !tokens.input_ids || !tokens.attention_mask) {
-        console.warn('⚠️ Invalid tokenization output');
         return this.mockEmbed(text);
-      }
-
-      // Verify expected length
-      if (tokens.input_ids.length !== MAX_TOKEN_LENGTH) {
-        console.warn(`⚠️ Unexpected token length: ${tokens.input_ids.length}, expected ${MAX_TOKEN_LENGTH}`);
       }
 
       // Convert to Int32Array for ONNX Runtime
       const inputIds = new Int32Array(tokens.input_ids);
       const attentionMask = new Int32Array(tokens.attention_mask);
-
-      // Log tokenization details for debugging
-      const actualTokenCount = tokens.attention_mask.filter(m => m === 1).length;
-      console.log(`🔤 Tokenized: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" -> ${actualTokenCount} tokens (padded to ${MAX_TOKEN_LENGTH})`);
 
       // Run ONNX inference
       const feeds: any = {
@@ -189,11 +140,9 @@ class OnnxService {
       const embedding = Array.from(out?.data || []);
 
       if (embedding.length === 0) {
-        console.warn('⚠️ Empty embedding from ONNX, using mock');
         return this.mockEmbed(text);
       }
 
-      console.log(`✅ Text embedded with SigLIP-2 (${embedding.length}D)`);
       return embedding;
     } catch (error: any) {
       console.error('❌ Text embedding failed:', error?.message || error);
