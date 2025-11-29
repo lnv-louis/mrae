@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -32,11 +32,7 @@ export default function PhotoDetailScreen({ route, navigation }: any) {
   const [imageLoaded, setImageLoaded] = useState(false);
 
   // Preload AI data immediately when screen opens
-  useEffect(() => {
-    loadAiDetails();
-  }, []);
-
-  const loadAiDetails = async () => {
+  const loadAiDetails = useCallback(async () => {
     try {
       setLoadingAi(true);
       const data = await embeddingService.generateCaptionWithContext({ id: photoId, uri });
@@ -46,9 +42,13 @@ export default function PhotoDetailScreen({ route, navigation }: any) {
     } finally {
       setLoadingAi(false);
     }
-  };
+  }, [photoId, uri]);
 
-  const handleShare = async () => {
+  useEffect(() => {
+    loadAiDetails();
+  }, [loadAiDetails]);
+
+  const handleShare = useCallback(async () => {
     try {
       await Share.share({
         url: uri,
@@ -57,9 +57,9 @@ export default function PhotoDetailScreen({ route, navigation }: any) {
     } catch (error) {
       console.error(error);
     }
-  };
+  }, [uri]);
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     Alert.alert(
       'Delete Photo',
       'Are you sure you want to delete this photo from your device?',
@@ -80,12 +80,12 @@ export default function PhotoDetailScreen({ route, navigation }: any) {
         }
       ]
     );
-  };
+  }, [photoId, uri, navigation]);
 
-  const handleLike = async () => {
+  const handleLike = useCallback(async () => {
     await userPreferenceService.markPreference(photoId, 'Like');
     Alert.alert('Marked as Favorite', 'We will show you more photos like this.');
-  };
+  }, [photoId]);
 
   return (
     <View style={styles.container}>

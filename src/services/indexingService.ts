@@ -30,6 +30,16 @@ class IndexingService {
       // Initialize models
       await embeddingService.initializeImageModel();
       await embeddingService.initializeTextModel();
+      
+      // Initialize STT model for voice search (download on first launch)
+      const transcriptionService = (await import('./transcriptionService')).default;
+      if (transcriptionService.available()) {
+        try {
+          await transcriptionService.initialize('whisper-small');
+        } catch (error) {
+          console.warn('⚠️ STT model initialization failed, will retry when needed');
+        }
+      }
 
       // Prepare database schema
       await databaseService.initImageIndex();

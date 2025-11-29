@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,14 @@ import {
   Linking,
   TouchableOpacity,
   Dimensions,
-  Image
+  Image,
+  Modal,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as MediaLibrary from 'expo-media-library';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import PhotoGrid from '../components/PhotoGrid';
 import { CleanupMode } from '../components/CleanupMode';
@@ -57,12 +60,12 @@ export default function GalleryScreen({ navigation }: any) {
       if (viewMode === 'all') loadPhotos();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, checkPermissionsAndLoad, loadUsername, loadPhotos, viewMode]);
 
   useEffect(() => {
     if (viewMode === 'folders') loadAlbums();
     // Categories are loaded via manual action or pre-loaded if we had them stored
-  }, [viewMode]);
+  }, [viewMode, loadAlbums]);
 
   useEffect(() => {
     if (selectedAlbum) {
@@ -74,27 +77,18 @@ export default function GalleryScreen({ navigation }: any) {
     } else {
       setFilteredPhotos(photos);
     }
-  }, [selectedAlbum, selectedCategory, photos]);
+  }, [selectedAlbum, selectedCategory, photos, loadAlbumPhotos]);
 
-  const loadUsername = async () => {
+  const loadUsername = useCallback(async () => {
     try {
       const stored = await storageService.get('username');
       if (stored) setUsername(stored);
     } catch (error) {
       console.error(error);
     }
-  };
+  }, []);
 
-  const checkPermissionsAndLoad = async () => {
-      const hasPermission = await photoService.requestPermissions();
-      if (!hasPermission) {
-      Alert.alert('Permission Required', 'Please allow access to photos.');
-      return;
-    }
-    loadPhotos();
-  };
-
-  const loadPhotos = async () => {
+  const loadPhotos = useCallback(async () => {
     try {
       setLoading(true);
       const fetched = await photoService.getAllPhotos();
@@ -102,11 +96,20 @@ export default function GalleryScreen({ navigation }: any) {
     } catch (e) {
       console.error(e);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const loadAlbums = async () => {
+  const checkPermissionsAndLoad = useCallback(async () => {
+    const hasPermission = await photoService.requestPermissions();
+    if (!hasPermission) {
+      Alert.alert('Permission Required', 'Please allow access to photos.');
+      return;
+    }
+    loadPhotos();
+  }, [loadPhotos]);
+
+  const loadAlbums = useCallback(async () => {
     try {
       setLoading(true);
       const fetched = await photoService.getAlbums();
@@ -116,9 +119,9 @@ export default function GalleryScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadAlbumPhotos = async (album: MediaLibrary.Album) => {
+  const loadAlbumPhotos = useCallback(async (album: MediaLibrary.Album) => {
     try {
       setLoading(true);
       const fetched = await photoService.getPhotosInAlbum(album);
@@ -128,18 +131,18 @@ export default function GalleryScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (viewMode === 'all') await loadPhotos();
     if (viewMode === 'folders') await loadAlbums();
     setRefreshing(false);
-  };
+  }, [viewMode, loadPhotos, loadAlbums]);
 
-  const handlePhotoPress = (photo: PhotoMetadata) => {
+  const handlePhotoPress = useCallback((photo: PhotoMetadata) => {
     navigation.navigate('PhotoDetail', { photoId: photo.id, uri: photo.uri });
-  };
+  }, [navigation]);
 
   const handleCategorize = async () => {
     Alert.prompt(
@@ -263,7 +266,7 @@ export default function GalleryScreen({ navigation }: any) {
         {/* Actions */}
         {!isDrillDown && viewMode === 'all' && (
           <TouchableOpacity style={styles.headerAction} onPress={() => setIsCleanupMode(true)}>
-            <Ionicons name="sparkles-outline" size={20} color={colors.warm.accent} />
+            <Ionicons name="brush-outline" size={20} color={colors.warm.accent} />
           </TouchableOpacity>
         )}
       </View>
@@ -271,6 +274,11 @@ export default function GalleryScreen({ navigation }: any) {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff"/>}
+        decelerationRate={0.998}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        overScrollMode="never"
       >
         {isDrillDown ? (
           <PhotoGrid photos={filteredPhotos} onPhotoPress={handlePhotoPress} />
@@ -289,23 +297,53 @@ export default function GalleryScreen({ navigation }: any) {
           )}
       </ScrollView>
 
-      {/* Cleanup Mode Modal Overlay would go here or navigation */}
-      {isCleanupMode && (
-        <View style={styles.modalOverlay}>
+      {/* Cleanup Mode Fullscreen Modal */}
+      <Modal
+        visible={isCleanupMode}
+        animationType="fade"
+        transparent={false}
+        statusBarTranslucent={true}
+        onRequestClose={() => setIsCleanupMode(false)}
+      >
+        <StatusBar hidden={true} />
+        <GestureHandlerRootView style={{ flex: 1 }}>
           <CleanupMode 
             photos={photos}
             onKeep={async (p) => await userPreferenceService.markPreference(p.id, 'Like')}
-            onDelete={async (p) => {
-              await MediaLibrary.deleteAssetsAsync([p.id]);
-              setPhotos(prev => prev.filter(x => x.id !== p.id));
+            onDelete={(p) => {
+              // Queue for deletion, don't delete immediately - handled in CleanupMode
             }}
-            onFinish={() => setIsCleanupMode(false)}
+            onFinish={(photosToDelete) => {
+              // Delete all queued photos at once
+              if (photosToDelete && photosToDelete.length > 0) {
+                Alert.alert(
+                  'Delete Photos',
+                  `Are you sure you want to delete ${photosToDelete.length} photo${photosToDelete.length > 1 ? 's' : ''}?`,
+                  [
+                    { text: 'Cancel', style: 'cancel', onPress: () => setIsCleanupMode(false) },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          await MediaLibrary.deleteAssetsAsync(photosToDelete.map(p => p.id));
+                          setPhotos(prev => prev.filter(x => !photosToDelete.some(d => d.id === x.id)));
+                          setIsCleanupMode(false);
+                        } catch (e) {
+                          Alert.alert('Error', 'Failed to delete some photos');
+                          setIsCleanupMode(false);
+                        }
+                      }
+                    }
+                  ]
+                );
+              } else {
+                setIsCleanupMode(false);
+              }
+            }}
           />
-          <TouchableOpacity style={styles.closeModal} onPress={() => setIsCleanupMode(false)}>
-            <Ionicons name="close" size={24} color={colors.neutral.white} />
-          </TouchableOpacity>
-        </View>
-      )}
+        </GestureHandlerRootView>
+      </Modal>
     </ScreenLayout>
   );
 }
@@ -467,17 +505,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(93, 64, 55, 0.95)',
+  fullscreenModal: {
+    flex: 1,
+    backgroundColor: '#1C1C1E',
+    paddingTop: 0,
   },
   closeModal: {
     position: 'absolute',
-    top: 60,
+    top: 50,
     right: 20,
-    zIndex: 10,
-    padding: 12,
-    backgroundColor: colors.warm.primary,
-    borderRadius: 20,
+    zIndex: 1000,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
 });

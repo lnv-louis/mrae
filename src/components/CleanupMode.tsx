@@ -19,7 +19,7 @@ interface CleanupModeProps {
   photos: PhotoMetadata[];
   onKeep: (photo: PhotoMetadata) => void;
   onDelete: (photo: PhotoMetadata) => void;
-  onFinish: () => void;
+  onFinish: (photosToDelete: PhotoMetadata[]) => void;
 }
 
 const Card = ({ photo, onSwipeComplete, index }: { photo: PhotoMetadata; onSwipeComplete: (direction: 'left' | 'right') => void; index: number }) => {
@@ -30,6 +30,8 @@ const Card = ({ photo, onSwipeComplete, index }: { photo: PhotoMetadata; onSwipe
   const savedTranslateY = useSharedValue(0);
 
   const panGesture = Gesture.Pan()
+    .enabled(true)
+    .minDistance(10)
     .onStart(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
@@ -41,12 +43,14 @@ const Card = ({ photo, onSwipeComplete, index }: { photo: PhotoMetadata; onSwipe
     })
     .onEnd((event) => {
       scale.value = withSpring(1);
-      if (event.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withSpring(width * 1.5);
-        runOnJS(onSwipeComplete)('right');
-      } else if (event.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(-width * 1.5);
-        runOnJS(onSwipeComplete)('left');
+      if (Math.abs(event.translationX) > SWIPE_THRESHOLD) {
+        if (event.translationX > 0) {
+          translateX.value = withSpring(width * 1.5);
+          runOnJS(onSwipeComplete)('right');
+        } else {
+          translateX.value = withSpring(-width * 1.5);
+          runOnJS(onSwipeComplete)('left');
+        }
       } else {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
@@ -113,28 +117,48 @@ const Card = ({ photo, onSwipeComplete, index }: { photo: PhotoMetadata; onSwipe
 
 export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeProps) => {
   const [currentIndex, setCurrentIndex] = React.useState(0);
+  const [photosToDelete, setPhotosToDelete] = React.useState<PhotoMetadata[]>([]);
 
   const handleSwipe = useCallback((direction: 'left' | 'right') => {
     const photo = photos[currentIndex];
     if (direction === 'left') {
+      // Queue for deletion instead of deleting immediately
+      setPhotosToDelete(prev => {
+        const updated = [...prev, photo];
+        // If this is the last photo, call onFinish with updated queue
+        if (currentIndex >= photos.length - 1) {
+          setTimeout(() => onFinish(updated), 100);
+        }
+        return updated;
+      });
       onDelete(photo);
     } else {
       onKeep(photo);
     }
     
     if (currentIndex >= photos.length - 1) {
-      onFinish();
+      // Finished all photos, will be handled in setPhotosToDelete callback
     } else {
       setCurrentIndex(prev => prev + 1);
     }
   }, [currentIndex, photos, onKeep, onDelete, onFinish]);
+  
+  const handleFinish = useCallback(() => {
+    // When user clicks close or finishes, pass queued photos
+    onFinish(photosToDelete);
+  }, [onFinish, photosToDelete]);
 
   if (currentIndex >= photos.length) {
     return (
       <View style={styles.container}>
         <View style={styles.finishCard}>
           <Text style={styles.finishTitle}>All caught up! 🎉</Text>
-          <TouchableOpacity style={styles.finishButton} onPress={onFinish}>
+          {photosToDelete.length > 0 && (
+            <Text style={styles.finishSubtitle}>
+              {photosToDelete.length} photo{photosToDelete.length > 1 ? 's' : ''} queued for deletion
+            </Text>
+          )}
+          <TouchableOpacity style={styles.finishButton} onPress={handleFinish}>
             <Text style={styles.finishButtonText}>Return to Gallery</Text>
           </TouchableOpacity>
         </View>
@@ -147,9 +171,21 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity 
+        style={styles.closeButton}
+        onPress={handleFinish}
+      >
+        <Text style={styles.closeButtonText}>✕</Text>
+      </TouchableOpacity>
+      
       <View style={styles.header}>
         <Text style={styles.title}>Cleanup Mode</Text>
         <Text style={styles.subtitle}>Swipe Left to Delete, Right to Keep</Text>
+        {photosToDelete.length > 0 && (
+          <Text style={styles.queueText}>
+            {photosToDelete.length} photo{photosToDelete.length > 1 ? 's' : ''} queued for deletion
+          </Text>
+        )}
       </View>
       
       <View style={styles.cardContainer}>
@@ -189,8 +225,8 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
-    marginTop: 40,
+    marginBottom: 30,
+    marginTop: 60,
   },
   title: {
     color: '#FFFFFF',
@@ -206,10 +242,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   cardContainer: {
-    width: width * 0.9,
-    height: height * 0.6,
+    width: width * 0.95,
+    height: height * 0.7,
     alignItems: 'center',
     justifyContent: 'center',
+    pointerEvents: 'box-none',
   },
   card: {
     width: '100%',
@@ -263,10 +300,11 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    marginTop: 50,
+    marginTop: 40,
+    marginBottom: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 32,
+    gap: 40,
   },
   actionButton: {
     width: 70,
@@ -306,7 +344,36 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1C1C1E',
+    marginBottom: 10,
+  },
+  finishSubtitle: {
+    fontSize: 16,
+    color: '#666',
     marginBottom: 20,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1000,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '300',
+  },
+  queueText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    marginTop: 8,
   },
   finishButton: {
     backgroundColor: '#FF6B4A',

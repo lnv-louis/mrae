@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { PhotoMetadata } from '../types';
 import { colors } from '../theme';
@@ -28,11 +28,7 @@ interface PhotoWithLayout extends PhotoMetadata {
 export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
   const [photosWithLayout, setPhotosWithLayout] = useState<PhotoWithLayout[]>([]);
 
-  useEffect(() => {
-    calculateLayout();
-  }, [photos]);
-
-  const getImageHeight = async (photo: PhotoMetadata): Promise<number> => {
+  const getImageHeight = useCallback(async (photo: PhotoMetadata): Promise<number> => {
     // If we have width and height metadata, use it
     if (photo.width && photo.height) {
       const aspectRatio = photo.width / photo.height;
@@ -55,9 +51,9 @@ export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
         }
       );
     });
-  };
+  }, []);
 
-  const calculateLayout = async () => {
+  const calculateLayout = useCallback(async () => {
     // Reset column heights
     const heights = [0, 0, 0];
     const layoutPhotos: PhotoWithLayout[] = [];
@@ -81,13 +77,24 @@ export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
     }
 
     setPhotosWithLayout(layoutPhotos);
-  };
+  }, [photos, getImageHeight]);
 
-  // Group photos by column
-  const columns: PhotoWithLayout[][] = [[], [], []];
-  photosWithLayout.forEach((photo) => {
-    columns[photo.column].push(photo);
-  });
+  useEffect(() => {
+    calculateLayout();
+  }, [calculateLayout]);
+
+  // Memoize column grouping
+  const columns = useMemo(() => {
+    const cols: PhotoWithLayout[][] = [[], [], []];
+    photosWithLayout.forEach((photo) => {
+      cols[photo.column].push(photo);
+    });
+    return cols;
+  }, [photosWithLayout]);
+
+  const handlePhotoPress = useCallback((photo: PhotoMetadata) => {
+    onPhotoPress?.(photo);
+  }, [onPhotoPress]);
 
   return (
     <View style={styles.container}>
@@ -100,7 +107,7 @@ export default function PhotoGrid({ photos, onPhotoPress }: PhotoGridProps) {
                 styles.item,
                 { height: photo.displayHeight }
               ]}
-          onPress={() => onPhotoPress?.(photo)}
+          onPress={() => handlePhotoPress(photo)}
           activeOpacity={0.8}
         >
           <Image

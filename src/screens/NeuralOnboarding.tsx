@@ -290,6 +290,7 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
     }
   }, [step]);
 
+
   const startRealIndexing = async () => {
     try {
       await indexingService.startIndexing((progress) => {
@@ -391,12 +392,6 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
           >
             {INDEXING_PHRASES[currentPhraseIndex]}
           </Animated.Text>
-          
-          <Text style={styles.statLabel}>
-            {indexingStats.total > 0 
-              ? `${indexingStats.processed} of ${indexingStats.total} photos` 
-              : 'initializing neural pathways...'}
-          </Text>
           
           {indexingStats.total > 0 && (
             <View style={styles.statusBadge}>
@@ -575,14 +570,16 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     alignItems: 'flex-start',
-    marginTop: spacing.l,
+    justifyContent: 'center',
     paddingLeft: spacing.xl,
     width: '100%',
+    flex: 1,
   },
   percentageContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     marginBottom: spacing.m,
+    paddingLeft: spacing.xl,
   },
   percentageNumber: {
     fontSize: 72,
@@ -596,14 +593,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     color: colors.text.secondary,
     marginLeft: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginTop: spacing.s,
-    textAlign: 'left',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -658,5 +647,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.m,
     fontStyle: 'italic',
     minHeight: 24,
+    paddingLeft: spacing.xl,
   },
 });

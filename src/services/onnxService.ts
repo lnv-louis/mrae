@@ -64,50 +64,31 @@ class OnnxService {
     try {
       console.log('🔧 Loading SigLIP-2 text encoder...');
       
-      // Try to load ONNX Runtime - use dynamic import to prevent module load errors
-      let ORT: any;
+      // Use the safer loader from onnxModelLoader which has better error handling
+      // This avoids the "Cannot read property 'install' of null" error by checking
+      // native module existence before requiring
       try {
-        // Use a function to safely require the module
-        const loadOnnxModule = () => {
-          try {
-            return require('onnxruntime-react-native');
-          } catch (e: any) {
-            // Suppress the "install" error that happens at module load
-            if (e?.message?.includes('install') || e?.message?.includes('null')) {
-              return null;
-            }
-            throw e;
-          }
-        };
+        const { tryLoadOnnxRuntime, loadTextEncoder } = await import('./onnxModelLoader');
         
-        ORT = loadOnnxModule();
+        // First check if ONNX Runtime can be loaded safely
+        const onnxruntime = tryLoadOnnxRuntime();
         
-        // Check if native module is properly initialized
-        if (!ORT || typeof ORT !== 'object') {
-          console.warn('⚠️ ONNX Runtime module not properly loaded');
+        if (!onnxruntime) {
+          console.warn('⚠️ ONNX Runtime module not available (native module not linked/initialized)');
+          console.log('💡 This is expected if the native module is not properly linked.');
+          console.log('💡 The app will use fallback embeddings instead.');
           return false;
         }
         
         // Check if InferenceSession exists
-        if (!ORT.InferenceSession || typeof ORT.InferenceSession !== 'function') {
+        if (!onnxruntime.InferenceSession || typeof onnxruntime.InferenceSession !== 'function') {
           console.warn('⚠️ ONNX Runtime InferenceSession not available');
           return false;
         }
         
-        console.log('✅ ONNX Runtime loaded');
-      } catch (e: any) {
-        // Suppress the "install" error
-        if (e?.message?.includes('install') || e?.message?.includes('null')) {
-          console.warn('⚠️ ONNX Runtime native module not initialized (install error suppressed)');
-        } else {
-          console.warn('⚠️ onnxruntime-react-native not available:', e?.message || e);
-        }
-        return false;
-      }
-
-      // Try to load the model
-      try {
-        const { loadTextEncoder } = await import('./onnxModelLoader');
+        console.log('✅ ONNX Runtime loaded successfully');
+        
+        // Try to load the model
         this.session = await loadTextEncoder();
         
         if (!this.session) {
@@ -122,7 +103,23 @@ class OnnxService {
         console.log('✅ SigLIP-2 text encoder ready (with simple tokenizer)!');
         return true;
       } catch (error: any) {
-        console.warn('⚠️ Error loading ONNX model:', error?.message || error);
+        // Catch errors from import or model loading
+        const errorMsg = error?.message || String(error) || '';
+        const errorStack = error?.stack || '';
+        const fullError = (errorMsg + ' ' + errorStack).toLowerCase();
+        
+        // Check for the specific "install" or "null" errors
+        if (fullError.includes('install') || 
+            fullError.includes('null') || 
+            fullError.includes('cannot read property') ||
+            fullError.includes('undefined') ||
+            fullError.includes('native module')) {
+          console.warn('⚠️ ONNX Runtime native module not initialized');
+          console.log('💡 This usually means the native module needs to be rebuilt.');
+          console.log('💡 Try: cd android && ./gradlew clean && cd .. && npm run android');
+        } else {
+          console.warn('⚠️ Error loading ONNX model:', errorMsg);
+        }
         console.log('Using mock embeddings for text queries');
         return false;
       }

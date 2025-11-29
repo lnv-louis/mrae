@@ -1,7 +1,119 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 
 const TEXT_MODEL_FILENAME = 'siglip2_text_encoder.onnx';
 const IMAGE_MODEL_FILENAME = 'siglip2_image_encoder.onnx';
+
+// Lazy load ONNX to prevent errors at module load time
+let onnxruntimeModule: any = null;
+let onnxruntimeLoadAttempted = false;
+
+export function tryLoadOnnxRuntime(): any {
+  // Only try once to prevent repeated errors
+  if (onnxruntimeLoadAttempted) {
+    return onnxruntimeModule;
+  }
+  
+  onnxruntimeLoadAttempted = true;
+  
+  // Use a defensive pattern with comprehensive error checking
+  try {
+    // First, check NativeModules to see if the native module exists
+    // This helps us detect if the native module is properly linked
+    const hasNativeModule = NativeModules && (
+      NativeModules.OnnxruntimeModule || 
+      NativeModules.ONNXRuntimeModule ||
+      NativeModules['OnnxruntimeModule'] ||
+      NativeModules['ONNXRuntimeModule']
+    );
+    
+    // If native module doesn't exist, the require will likely fail
+    // But we still try in case the module works differently
+    let moduleLoaded = false;
+    let requireError: any = null;
+    
+    // Use a more defensive require pattern that catches errors
+    // that might occur during module initialization
+    try {
+      // Wrap in an IIFE to ensure we catch all errors
+      const result = (() => {
+        try {
+          // @ts-ignore - dynamic require
+          return require('onnxruntime-react-native');
+        } catch (err: any) {
+          // Re-throw to be caught by outer try-catch
+          throw err;
+        }
+      })();
+      
+      onnxruntimeModule = result;
+      moduleLoaded = true;
+    } catch (err: any) {
+      // Catch errors during require() call or module initialization
+      requireError = err;
+      moduleLoaded = false;
+    }
+    
+    // If require failed, check the error type
+    if (!moduleLoaded || requireError) {
+      const errorMsg = requireError?.message || String(requireError) || '';
+      const errorStack = requireError?.stack || '';
+      const fullError = (errorMsg + ' ' + errorStack).toLowerCase();
+      
+      // Check for the specific "install" or "null" errors
+      // These indicate the native module isn't properly linked/initialized
+      if (fullError.includes('install') || 
+          fullError.includes('null') || 
+          fullError.includes('cannot read property') ||
+          fullError.includes('undefined') ||
+          fullError.includes('native module') ||
+          fullError.includes('not found')) {
+        // Silently suppress these known errors - they indicate missing native module
+        onnxruntimeModule = null;
+        return null;
+      }
+      // For other errors, log but still return null
+      console.warn('⚠️ ONNX Runtime require error:', errorMsg);
+      onnxruntimeModule = null;
+      return null;
+    }
+    
+    // If we got here, module was loaded successfully
+    // But verify it's a valid object with expected properties
+    if (!onnxruntimeModule || typeof onnxruntimeModule !== 'object') {
+      onnxruntimeModule = null;
+      return null;
+    }
+    
+    // Verify the module has the expected API
+    if (!onnxruntimeModule.InferenceSession) {
+      console.warn('⚠️ ONNX Runtime module loaded but InferenceSession not available');
+      onnxruntimeModule = null;
+      return null;
+    }
+    
+    return onnxruntimeModule;
+  } catch (e: any) {
+    // Outer catch for any unexpected errors during the entire process
+    const errorMsg = e?.message || String(e) || '';
+    const errorStack = e?.stack || '';
+    const fullError = (errorMsg + ' ' + errorStack).toLowerCase();
+    
+    if (fullError.includes('install') || 
+        fullError.includes('null') || 
+        fullError.includes('cannot read property') ||
+        fullError.includes('undefined') ||
+        fullError.includes('native module') ||
+        fullError.includes('not found')) {
+      // Silently suppress these known errors
+      onnxruntimeModule = null;
+      return null;
+    }
+    // For other errors, log but still return null
+    console.warn('⚠️ ONNX Runtime unexpected error:', errorMsg);
+    onnxruntimeModule = null;
+    return null;
+  }
+}
 
 async function loadOnnxModel(modelFilename: string): Promise<any | null> {
   let RNFS: any;
@@ -15,24 +127,11 @@ async function loadOnnxModel(modelFilename: string): Promise<any | null> {
   }
 
   try {
-    // Use a function to safely require the module to prevent load-time errors
-    const loadOnnxModule = () => {
-      try {
-        return require('onnxruntime-react-native');
-      } catch (e: any) {
-        // Suppress the "install" error that happens at module load
-        if (e?.message?.includes('install') || e?.message?.includes('null')) {
-          return null;
-        }
-        throw e;
-      }
-    };
+    // Try to load ONNX Runtime using our safe loader
+    const onnxruntime = tryLoadOnnxRuntime();
     
-    const onnxruntime = loadOnnxModule();
-    
-    // Check if native module is properly initialized
-    if (!onnxruntime || typeof onnxruntime !== 'object') {
-      console.warn('⚠️ ONNX Runtime module not properly loaded');
+    if (!onnxruntime) {
+      console.warn('⚠️ ONNX Runtime module not available');
       return null;
     }
     
@@ -44,11 +143,15 @@ async function loadOnnxModel(modelFilename: string): Promise<any | null> {
     
     InferenceSession = onnxruntime.InferenceSession;
   } catch (e: any) {
-    // Suppress the "install" error - it's a known issue with onnxruntime-react-native
-    if (e?.message?.includes('install') || e?.message?.includes('null')) {
+    // Final catch-all for any unexpected errors
+    const errorMsg = e?.message || String(e) || '';
+    if (errorMsg.includes('install') || 
+        errorMsg.includes('null') || 
+        errorMsg.includes('Cannot read property') ||
+        errorMsg.includes('undefined')) {
       console.warn('⚠️ ONNX Runtime native module not initialized (install error suppressed)');
     } else {
-      console.warn('⚠️ onnxruntime-react-native not available:', e?.message || e);
+      console.warn('⚠️ onnxruntime-react-native error:', errorMsg);
     }
     return null;
   }

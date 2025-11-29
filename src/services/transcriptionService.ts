@@ -112,6 +112,27 @@ class TranscriptionService {
     try {
       console.log(`Transcribing audio: ${audioFilePath}`);
       
+      // Validate audio file path
+      if (!audioFilePath || typeof audioFilePath !== 'string') {
+        console.error('Invalid audio file path:', audioFilePath);
+        return {
+          response: 'Invalid audio file path',
+          success: false,
+        };
+      }
+
+      // Ensure model is ready before transcribing
+      if (!this.ready || !this.sttModel) {
+        console.warn('STT model not ready, initializing...');
+        const initSuccess = await this.initialize();
+        if (!initSuccess || !this.sttModel) {
+          return {
+            response: 'STT model not available',
+            success: false,
+          };
+        }
+      }
+      
       const result = await this.sttModel.transcribe({
         audioFilePath,
         prompt: `Transcribe this audio in ${language}`,
@@ -122,15 +143,33 @@ class TranscriptionService {
         },
       });
 
+      if (!result || !result.response) {
+        console.warn('Transcription returned empty result');
+        return {
+          response: 'No transcription result',
+          success: false,
+        };
+      }
+
       console.log('✅ Audio transcribed successfully');
       return {
         response: result.response,
         success: true,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Transcription failed:', error);
+      const errorMsg = error?.message || String(error) || '';
+      
+      // Provide more helpful error messages
+      if (errorMsg.includes('file') || errorMsg.includes('path')) {
+        return {
+          response: 'Audio file not found or invalid',
+          success: false,
+        };
+      }
+      
       return {
-        response: 'Failed to transcribe audio',
+        response: 'Failed to transcribe audio. Please try again.',
         success: false,
       };
     }
