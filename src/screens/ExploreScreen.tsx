@@ -280,14 +280,32 @@ export default function ExploreScreen({ navigation }: any) {
             placeholder="Search moods, contexts..."
             placeholderTextColor={colors.text.tertiary}
             value={query}
-            onChangeText={setQuery}
+            onChangeText={(text) => {
+              setQuery(text);
+              // Reset search state when query is cleared
+              if (!text.trim() && hasSearched) {
+                setHasSearched(false);
+                setResultsPhotos([]);
+                setPhrases([]);
+                setMessage('');
+                setTranscript('');
+              }
+            }}
             onSubmitEditing={handleSearch}
             returnKeyType="search"
             editable={!searching && !isRecording}
           />
           {query.length > 0 && !searching && (
             <TouchableOpacity
-              onPress={() => setQuery('')}
+              onPress={() => {
+                setQuery('');
+                // Reset search state when clearing query
+                setHasSearched(false);
+                setResultsPhotos([]);
+                setPhrases([]);
+                setMessage('');
+                setTranscript('');
+              }}
               style={styles.clearButton}
             >
               <Ionicons name="close-circle" size={20} color={colors.text.tertiary} />

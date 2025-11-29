@@ -1,6 +1,5 @@
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system';
-import { Platform } from 'react-native';
 
 /**
  * Nano Banana Service - AI Image Editing

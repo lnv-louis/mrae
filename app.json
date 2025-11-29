@@ -7,9 +7,9 @@
     "icon": "./assets/mrae.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/mrae.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FFF8F3"
     },
     "assetBundlePatterns": [
       "**/*"

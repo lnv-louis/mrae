@@ -17,38 +17,73 @@ export function tryLoadOnnxRuntime(): any {
   
   // Use a defensive pattern with comprehensive error checking
   try {
-    // First, check NativeModules to see if the native module exists
-    // This helps us detect if the native module is properly linked
-    const hasNativeModule = NativeModules && (
-      NativeModules.OnnxruntimeModule || 
-      NativeModules.ONNXRuntimeModule ||
-      NativeModules['OnnxruntimeModule'] ||
-      NativeModules['ONNXRuntimeModule']
-    );
+    // CRITICAL: Check NativeModules FIRST before requiring the JS module
+    // The require() call triggers module initialization which tries to access
+    // the native module. If the native module doesn't exist, this will throw
+    // an error that React Native's error handler logs before our catch can suppress it.
     
-    // If native module doesn't exist, the require will likely fail
-    // But we still try in case the module works differently
+    // Check for native module using multiple possible names
+    let hasNativeModule = false;
+    if (NativeModules) {
+      // Try common naming patterns
+      const possibleNames = [
+        'OnnxruntimeModule',
+        'ONNXRuntimeModule',
+        'OnnxRuntimeModule',
+        'OnnxRuntime',
+        'ONNXRuntime',
+        'Onnxruntime',
+      ];
+      
+      // Check direct property access
+      hasNativeModule = possibleNames.some(name => 
+        NativeModules[name] !== undefined && NativeModules[name] !== null
+      );
+      
+      // Also check if any native module name contains 'onnx' (case-insensitive)
+      if (!hasNativeModule) {
+        const allModuleNames = Object.keys(NativeModules || {});
+        hasNativeModule = allModuleNames.some(name => 
+          name.toLowerCase().includes('onnx')
+        );
+      }
+    }
+    
+    // If native module doesn't exist, skip require() entirely to prevent error
+    // This is the KEY fix - by not calling require() when native module is missing,
+    // we prevent the "Cannot read property 'install' of null" error from being thrown
+    if (!hasNativeModule) {
+      // Native module not linked - return null without attempting require
+      // This prevents the error from being thrown in the first place
+      onnxruntimeModule = null;
+      return null;
+    }
+    
+    // Native module appears to exist, but we still need to be careful
+    // The require() call might still fail if the module isn't fully initialized
     let moduleLoaded = false;
     let requireError: any = null;
     
-    // Use a more defensive require pattern that catches errors
-    // that might occur during module initialization
+    // Use a very defensive require pattern
+    // Even though we checked for native module, the require might still fail
+    // if the module initialization code runs before the native bridge is ready
     try {
-      // Wrap in an IIFE to ensure we catch all errors
-      const result = (() => {
-        try {
-          // @ts-ignore - dynamic require
-          return require('onnxruntime-react-native');
-        } catch (err: any) {
-          // Re-throw to be caught by outer try-catch
-          throw err;
-        }
-      })();
+      // @ts-ignore - dynamic require
+      // This require() call will execute the module's initialization code
+      // If that code tries to access a null native module, it will throw here
+      const result = require('onnxruntime-react-native');
       
-      onnxruntimeModule = result;
-      moduleLoaded = true;
+      // Verify the result is valid before using it
+      if (result && typeof result === 'object') {
+        onnxruntimeModule = result;
+        moduleLoaded = true;
+      } else {
+        requireError = new Error('ONNX Runtime module returned invalid result');
+        moduleLoaded = false;
+      }
     } catch (err: any) {
       // Catch errors during require() call or module initialization
+      // This includes the "Cannot read property 'install' of null" error
       requireError = err;
       moduleLoaded = false;
     }

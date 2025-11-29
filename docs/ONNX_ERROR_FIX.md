@@ -51,10 +51,25 @@ const onnxruntime = tryLoadOnnxRuntime();
 ### 2. Improved `onnxModelLoader.ts`
 
 Enhanced the `tryLoadOnnxRuntime()` function with:
-- Better native module detection before requiring
+- **CRITICAL FIX**: Checks for native module existence BEFORE calling `require()`
+- If native module doesn't exist, skips `require()` entirely to prevent error
+- This prevents the "Cannot read property 'install' of null" error from being thrown
+- More comprehensive native module name detection (multiple naming patterns)
 - More comprehensive error handling for synchronous errors
 - Validation of module structure after loading
 - Clearer error messages with actionable guidance
+
+**Key Change:**
+```typescript
+// OLD: Would call require() even if native module didn't exist
+const result = require('onnxruntime-react-native'); // ❌ Throws error
+
+// NEW: Checks first, then only requires if native module exists
+if (!hasNativeModule) {
+  return null; // ✅ Skip require() to prevent error
+}
+const result = require('onnxruntime-react-native'); // ✅ Safe to call
+```
 
 ### 3. Error Handling Improvements
 

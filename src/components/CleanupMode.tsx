@@ -9,6 +9,7 @@ import Animated, {
   interpolate,
   Extrapolate,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { PhotoMetadata } from '../types';
 import { BlurView } from 'expo-blur';
 
@@ -171,22 +172,28 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity 
-        style={styles.closeButton}
-        onPress={handleFinish}
-      >
-        <Text style={styles.closeButtonText}>✕</Text>
-      </TouchableOpacity>
-      
-      <View style={styles.header}>
-        <Text style={styles.title}>Cleanup Mode</Text>
+      {/* Header with title - always visible at top */}
+      <BlurView intensity={80} tint="dark" style={styles.headerBar}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>Cleanup Mode</Text>
+            {photosToDelete.length > 0 && (
+              <View style={styles.queueBadge}>
+                <Text style={styles.queueBadgeText}>
+                  {photosToDelete.length} queued
+                </Text>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={handleFinish}
+          >
+            <Ionicons name="close" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.subtitle}>Swipe Left to Delete, Right to Keep</Text>
-        {photosToDelete.length > 0 && (
-          <Text style={styles.queueText}>
-            {photosToDelete.length} photo{photosToDelete.length > 1 ? 's' : ''} queued for deletion
-          </Text>
-        )}
-      </View>
+      </BlurView>
       
       <View style={styles.cardContainer}>
         {visiblePhotos.reverse().map((photo, index) => (
@@ -204,13 +211,13 @@ export const CleanupMode = ({ photos, onKeep, onDelete, onFinish }: CleanupModeP
           style={[styles.actionButton, styles.deleteButton]}
           onPress={() => handleSwipe('left')}
         >
-          <Text style={styles.buttonEmoji}>🗑️</Text>
+          <Ionicons name="trash-outline" size={28} color="#FF3B30" />
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.actionButton, styles.keepButton]}
           onPress={() => handleSwipe('right')}
         >
-          <Text style={styles.buttonEmoji}>❤️</Text>
+          <Ionicons name="heart" size={28} color="#4CD964" />
         </TouchableOpacity>
       </View>
     </View>
@@ -222,31 +229,59 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#1C1C1E',
   },
-  header: {
+  headerBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    paddingTop: 50,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  headerContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
-    marginTop: 60,
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  },
+  queueBadge: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  queueBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   subtitle: {
     color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 16,
+    fontSize: 14,
+    marginTop: 4,
   },
   cardContainer: {
     width: width * 0.95,
-    height: height * 0.7,
+    height: height * 0.65,
     alignItems: 'center',
     justifyContent: 'center',
     pointerEvents: 'box-none',
+    marginTop: 100,
   },
   card: {
     width: '100%',
@@ -310,7 +345,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -323,13 +358,10 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   deleteButton: {
-    borderWidth: 0,
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
   },
   keepButton: {
-    borderWidth: 0,
-  },
-  buttonEmoji: {
-    fontSize: 30,
+    backgroundColor: 'rgba(76, 217, 100, 0.1)',
   },
   finishCard: {
     padding: 40,
@@ -352,23 +384,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   closeButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 1000,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '300',
   },
   queueText: {
     color: 'rgba(255, 255, 255, 0.7)',

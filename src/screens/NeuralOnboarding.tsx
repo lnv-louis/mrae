@@ -341,6 +341,7 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
               resizeMode="contain"
             />
           </Animated.View>
+          
           <Animated.Text entering={FadeInDown.delay(300).duration(1000).springify()} style={styles.subtitle}>
             Your external memory,{'\n'}reimagined.
           </Animated.Text>
