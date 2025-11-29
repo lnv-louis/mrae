@@ -1,6 +1,6 @@
 export interface PhotoMetadata {
   id: string;
-  filePath: string;
+  filePath?: string; // Optional because cloud photos don't have a local path initially
   uri: string;
   caption?: string;
   tags?: string[];
@@ -9,6 +9,7 @@ export interface PhotoMetadata {
   createdAt: number;
   width?: number;
   height?: number;
+  source?: 'local' | 'google_photos';
 }
 
 export interface EmbeddingResult {

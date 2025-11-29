@@ -9,8 +9,14 @@ class PhotoService {
    */
   async requestPermissions(): Promise<boolean> {
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const { status, canAskAgain } = await MediaLibrary.requestPermissionsAsync();
       this.permissionGranted = status === 'granted';
+      
+      if (!this.permissionGranted && canAskAgain) {
+        // If failed but can ask again, try one more time or handle gracefully
+        console.log('Permission denied, but can ask again.');
+      }
+      
       return this.permissionGranted;
     } catch (error) {
       console.error('Error requesting permissions:', error);

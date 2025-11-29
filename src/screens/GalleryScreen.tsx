@@ -7,21 +7,52 @@ import {
   RefreshControl,
   ScrollView,
   Alert,
+  Linking,
+  TouchableOpacity,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import PhotoGrid from '../components/PhotoGrid';
+import { CleanupMode } from '../components/CleanupMode';
 import photoService from '../services/photoService';
 import { PhotoMetadata } from '../types';
 import ScreenLayout from '../components/ScreenLayout';
+import { StatBlock } from '../components/StatBlock';
+import { GallerySheet } from '../components/GallerySheet';
+import { colors, typography, spacing, radius, haptics } from '../theme';
 
 export default function GalleryScreen() {
   const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isCleanupMode, setIsCleanupMode] = useState(false);
 
   useEffect(() => {
-    loadPhotos();
+    checkPermissionsAndLoad();
   }, []);
+
+  const checkPermissionsAndLoad = async () => {
+    try {
+      const hasPermission = await photoService.requestPermissions();
+      
+      if (!hasPermission) {
+        setLoading(false);
+        Alert.alert(
+          'Permission Required',
+          'MRAE needs access to your gallery to help you clean and organize it.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
+        );
+        return;
+      }
+
+      await loadPhotos();
+    } catch (error) {
+      console.error('Error in permissions check:', error);
+      setLoading(false);
+    }
+  };
 
   const loadPhotos = async () => {
     try {
@@ -30,7 +61,7 @@ export default function GalleryScreen() {
       setPhotos(fetchedPhotos);
     } catch (error) {
       console.error('Error loading photos:', error);
-      Alert.alert('Error', 'Failed to load photos. Please check permissions.');
+      Alert.alert('Error', 'Failed to load photos.');
     } finally {
       setLoading(false);
     }
@@ -43,37 +74,42 @@ export default function GalleryScreen() {
   };
 
   const handlePhotoPress = (photo: PhotoMetadata) => {
-    // TODO: Implement photo detail view
     console.log('Photo pressed:', photo.id);
+  };
+
+  const handleKeepPhoto = (photo: PhotoMetadata) => {
+    console.log('Keep:', photo.id);
+  };
+
+  const handleDeletePhoto = (photo: PhotoMetadata) => {
+    console.log('Delete request:', photo.id);
+  };
+
+  const handleCleanupFinish = () => {
+    setIsCleanupMode(false);
+    Alert.alert('Cleanup Complete', 'Your gallery is looking fresher! ✨');
   };
 
   if (loading) {
     return (
       <ScreenLayout>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#fff" />
+          <ActivityIndicator size="large" color={colors.neutral.white} />
           <Text style={styles.loadingText}>Loading photos...</Text>
         </View>
       </ScreenLayout>
     );
   }
 
-  if (photos.length === 0) {
+  if (isCleanupMode && photos.length > 0) {
     return (
       <ScreenLayout>
-        <ScrollView
-          contentContainerStyle={styles.center}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
-          }
-        >
-          <BlurView intensity={20} style={styles.glassCard}>
-            <Text style={styles.emptyText}>No photos found</Text>
-            <Text style={styles.emptySubtext}>
-              Grant permissions to access your photo library
-            </Text>
-          </BlurView>
-        </ScrollView>
+        <CleanupMode
+          photos={photos}
+          onKeep={handleKeepPhoto}
+          onDelete={handleDeletePhoto}
+          onFinish={handleCleanupFinish}
+        />
       </ScreenLayout>
     );
   }
@@ -83,14 +119,69 @@ export default function GalleryScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.neutral.white} />
         }
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Gallery</Text>
-          <Text style={styles.count}>{photos.length} photos</Text>
+        <View style={styles.headerContainer}>
+          <Text style={styles.greeting}>HELLO, ALEX!</Text>
+          <Text style={styles.subtitle}>HOW ARE YOU{'\n'}FEELING TODAY?</Text>
         </View>
-        <PhotoGrid photos={photos} onPhotoPress={handlePhotoPress} />
+
+        <View style={styles.statsContainer}>
+          <StatBlock 
+            label="Photos"
+            value={photos.length.toString()}
+            subtext="Total Memories"
+            style={styles.statCardLarge}
+            gradient
+            icon={
+              <View style={styles.audioWaveContainer}>
+                 <View style={[styles.bar, { height: 20 }]} />
+                 <View style={[styles.bar, { height: 35 }]} />
+                 <View style={[styles.bar, { height: 25 }]} />
+                 <View style={[styles.bar, { height: 40 }]} />
+                 <View style={[styles.bar, { height: 30 }]} />
+                 <View style={[styles.bar, { height: 45 }]} />
+                 <View style={[styles.bar, { height: 25 }]} />
+              </View>
+            }
+          />
+
+          <View style={styles.rightColumn}>
+            <StatBlock 
+              label="Videos"
+              value="--"
+              style={styles.statCardSmall}
+            />
+            <StatBlock 
+              label="Albums"
+              value="--"
+              style={styles.statCardSmall}
+            />
+          </View>
+        </View>
+
+        <GallerySheet
+          title="Your Gallery"
+          action={
+            <TouchableOpacity onPress={() => setIsCleanupMode(true)}>
+              <Text style={styles.actionText}>Clean Up</Text>
+            </TouchableOpacity>
+          }
+        >
+          {photos.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No photos found</Text>
+              <TouchableOpacity onPress={checkPermissionsAndLoad}>
+                  <Text style={styles.emptyAction}>Grant Access</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <PhotoGrid photos={photos} onPhotoPress={handlePhotoPress} />
+          )}
+        </GallerySheet>
+
       </ScrollView>
     </ScreenLayout>
   );
@@ -98,55 +189,82 @@ export default function GalleryScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 100, // Space for tab bar
+    flexGrow: 1,
+    paddingTop: spacing.header,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  header: {
-    padding: 20,
-    marginTop: 40,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 5,
-    textShadowColor: 'rgba(0,0,0,0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  count: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
   },
   loadingText: {
-    marginTop: 10,
-    color: '#fff',
-    fontSize: 16,
+    marginTop: spacing.s,
+    color: colors.neutral.white,
+    ...typography.body.m,
   },
-  glassCard: {
-    padding: 30,
-    borderRadius: 20,
-    overflow: 'hidden',
+  headerContainer: {
+    paddingHorizontal: spacing.l,
+    marginBottom: spacing.l,
+  },
+  greeting: {
+    color: colors.neutral.white,
+    opacity: 0.9,
+    marginBottom: spacing.s,
+    textTransform: 'uppercase',
+    ...typography.body.m,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  subtitle: {
+    color: colors.neutral.white,
+    ...typography.header.xl,
+    fontWeight: '300',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.l,
+    gap: spacing.m,
+    height: 180,
+  },
+  statCardLarge: {
+    flex: 1.5,
+  },
+  rightColumn: {
+    flex: 1,
+    gap: spacing.m,
+  },
+  statCardSmall: {
+    flex: 1,
+  },
+  audioWaveContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    width: '80%',
+    gap: spacing.xs,
+    height: 40,
+    marginVertical: spacing.xs,
+  },
+  bar: {
+    width: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 2,
+  },
+  actionText: {
+    color: colors.sunset.accent,
+    ...typography.body.m,
+    fontWeight: '600',
+  },
+  emptyState: {
+    padding: spacing.xl,
+    alignItems: 'center',
   },
   emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 10,
+    color: colors.neutral.black,
+    ...typography.header.m,
+    marginBottom: spacing.m,
   },
-  emptySubtext: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
+  emptyAction: {
+    color: colors.sunset.accent,
+    ...typography.body.m,
+    fontWeight: '600',
   },
 });
-
-
