@@ -1,4 +1,6 @@
 import { EmbeddingResult } from '../types';
+import cactusService from './cactusService';
+import geminiService from './geminiService';
 
 class EmbeddingService {
   private textModelInitialized = false;
@@ -30,34 +32,36 @@ class EmbeddingService {
    * Generate text embedding (MOCKED)
    */
   async embedText(text: string): Promise<EmbeddingResult> {
+    // Prefer Gemini cloud embedding if available
+    if (geminiService.hasApiKey()) {
+      const vec = await geminiService.embedText(text);
+      if (vec && vec.length > 0) {
+        return { embedding: vec, success: true };
+      }
+    }
     if (!this.textModelInitialized) {
       await this.initializeTextModel();
     }
-
-    console.log('Generating text embedding (Mocked) for:', text);
-    // Return a random dummy vector
     const dummyEmbedding = Array(384).fill(0).map(() => Math.random());
-    return {
-      embedding: dummyEmbedding,
-      success: true,
-    };
+    return { embedding: dummyEmbedding, success: true };
   }
 
   /**
    * Generate image embedding (MOCKED)
    */
   async embedImage(imagePath: string): Promise<EmbeddingResult> {
+    // Prefer Cactus if available
+    if (cactusService.available()) {
+      const vec = await cactusService.imageEmbed(imagePath);
+      if (vec && vec.length > 0) {
+        return { embedding: vec, success: true };
+      }
+    }
     if (!this.imageModelInitialized) {
       await this.initializeImageModel();
     }
-
-    console.log('Generating image embedding (Mocked) for:', imagePath);
-    // Return a random dummy vector
     const dummyEmbedding = Array(384).fill(0).map(() => Math.random());
-    return {
-      embedding: dummyEmbedding,
-      success: true,
-    };
+    return { embedding: dummyEmbedding, success: true };
   }
 
   /**

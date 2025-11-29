@@ -1,6 +1,9 @@
 import embeddingService from './embeddingService';
 import photoService from './photoService';
 import storageService from '../utils/storage';
+import databaseService from './databaseService';
+import geoService from './geoService';
+import * as MediaLibrary from 'expo-media-library';
 import { PhotoMetadata, IndexingProgress } from '../types';
 
 class IndexingService {
@@ -28,6 +31,9 @@ class IndexingService {
       await embeddingService.initializeImageModel();
       await embeddingService.initializeTextModel();
 
+      // Prepare database schema
+      await databaseService.initImageIndex();
+
       // Get all photos
       const photos = await photoService.getAllPhotos();
       const total = photos.length;
@@ -39,12 +45,17 @@ class IndexingService {
         processed: 0,
       };
 
-      // Get already indexed photos
+      // Already indexed IDs (DB)
+      const existingDbIds = new Set(await databaseService.getImageIndexIds());
+      // Already indexed (AsyncStorage) for backwards compatibility
       const indexedPhotos = await storageService.getAllPhotos();
       const indexedIds = new Set(indexedPhotos.map((p) => p.id));
 
-      // Process photos
-      for (let i = 0; i < photos.length; i++) {
+      // Transactional write for performance
+      await databaseService.beginTransaction();
+      try {
+        // Process photos
+        for (let i = 0; i < photos.length; i++) {
         if (this.shouldStop) {
           console.log('Indexing stopped by user');
           break;
@@ -55,7 +66,7 @@ class IndexingService {
         progress.processed = i;
 
         // Skip if already indexed
-        if (indexedIds.has(photo.id)) {
+        if (existingDbIds.has(photo.id) || indexedIds.has(photo.id)) {
           const existing = indexedPhotos.find((p) => p.id === photo.id);
           if (existing?.imageEmbedding && existing.imageEmbedding.length > 0) {
             console.log(`Skipping already indexed: ${photo.id}`);
@@ -76,6 +87,21 @@ class IndexingService {
             continue;
           }
 
+          // Location & timestamp via MediaLibrary
+          let latitude: number | null = null;
+          let longitude: number | null = null;
+          try {
+            const assetInfo = await MediaLibrary.getAssetInfoAsync(photo.id);
+            const loc: any = (assetInfo as any)?.location;
+            latitude = typeof loc?.latitude === 'number' ? loc.latitude : null;
+            longitude = typeof loc?.longitude === 'number' ? loc.longitude : null;
+          } catch {}
+          const timestamp = photo.createdAt;
+          let city: string | null = null;
+          if (latitude !== null && longitude !== null) {
+            city = await geoService.reverseGeocodeToCity(latitude, longitude);
+          }
+
           // Generate caption (optional, can be slow)
           // const caption = await embeddingService.generateCaption(photo.uri);
 
@@ -87,6 +113,19 @@ class IndexingService {
 
           // Save to storage
           await storageService.savePhotoMetadata(metadata);
+
+          // Save to SQL (embedding as Float32 -> Uint8Array)
+          const float32 = new Float32Array(imageEmbeddingResult.embedding);
+          const bytes = new Uint8Array(float32.buffer);
+          await databaseService.insertImageIndex({
+            id: photo.id,
+            uri: photo.uri,
+            embedding: bytes,
+            latitude,
+            longitude,
+            city,
+            timestamp,
+          });
 
           // Update progress
           if (this.onProgressCallback) {
@@ -104,6 +143,11 @@ class IndexingService {
             this.onProgressCallback(progress);
           }
         }
+        }
+        await databaseService.commitTransaction();
+      } catch (e) {
+        await databaseService.rollbackTransaction();
+        throw e;
       }
 
       progress.processed = total;
@@ -119,6 +163,22 @@ class IndexingService {
       throw error;
     } finally {
       this.isIndexing = false;
+    }
+  }
+
+  async ensureUpToDate(): Promise<void> {
+    if (this.isIndexing) return;
+    try {
+      await databaseService.initImageIndex();
+      const photos = await photoService.getAllPhotos();
+      const dbIds = new Set(await databaseService.getImageIndexIds());
+      const missingCount = photos.filter((p) => !dbIds.has(p.id)).length;
+      const lastIndexed = await storageService.getLastIndexed();
+      if (!lastIndexed || missingCount > 0) {
+        await this.startIndexing();
+      }
+    } catch (e) {
+      // swallow errors to avoid blocking app launch
     }
   }
 
@@ -156,4 +216,3 @@ class IndexingService {
 }
 
 export default new IndexingService();
-

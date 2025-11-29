@@ -1,0 +1,2 @@
+android/app/src/main/assets/siglip2_text_encoder.onnx filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
