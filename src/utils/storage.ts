@@ -5,9 +5,33 @@ const STORAGE_KEYS = {
   PHOTOS: 'mrae_photos',
   INDEXING_PROGRESS: 'mrae_indexing_progress',
   LAST_INDEXED: 'mrae_last_indexed',
+  USERNAME: 'mrae_username',
 };
 
 class StorageService {
+  /**
+   * Generic get method
+   */
+  async get(key: string): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(key);
+    } catch (error) {
+      console.error(`Error getting ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Generic set method
+   */
+  async set(key: string, value: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem(key, value);
+    } catch (error) {
+      console.error(`Error setting ${key}:`, error);
+    }
+  }
+
   /**
    * Save photo metadata with embeddings
    */

@@ -13,6 +13,7 @@ import indexingService from '../services/indexingService';
 import storageService from '../utils/storage';
 import { IndexingProgress } from '../types';
 import ScreenLayout from '../components/ScreenLayout';
+import { colors, spacing, radius } from '../theme';
 
 export default function SettingsScreen({ navigation }: any) {
   const [isIndexing, setIsIndexing] = useState(false);
@@ -102,7 +103,7 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Smart Cleaner Section */}
         <BlurView intensity={20} style={styles.glassCard}>
           <View style={styles.cardHeader}>
-            <Ionicons name="trash-bin-outline" size={24} color="#fff" />
+            <Ionicons name="trash-bin-outline" size={24} color={colors.warm.accent} />
             <Text style={styles.cardTitle}>Smart Storage</Text>
           </View>
           <Text style={styles.cardDescription}>
@@ -127,12 +128,12 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Indexing Section */}
         <BlurView intensity={20} style={styles.glassCard}>
           <View style={styles.cardHeader}>
-            <Ionicons name="scan-outline" size={24} color="#fff" />
+            <Ionicons name="scan-outline" size={24} color={colors.warm.accent} />
             <Text style={styles.cardTitle}>AI Indexing</Text>
           </View>
           {!isIndexing && indexingProgress && indexingProgress.total > 0 && indexingProgress.processed >= indexingProgress.total && (
             <View style={styles.completeBanner}>
-              <Ionicons name="checkmark-circle" size={18} color="#34C759" />
+              <Ionicons name="checkmark-circle" size={18} color={colors.semantic.success} />
               <Text style={styles.completeText}>Indexing Complete • Search Ready</Text>
             </View>
           )}
@@ -183,7 +184,7 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Data Management */}
         <BlurView intensity={20} style={styles.glassCard}>
            <View style={styles.cardHeader}>
-            <Ionicons name="server-outline" size={24} color="#fff" />
+            <Ionicons name="server-outline" size={24} color={colors.warm.accent} />
             <Text style={styles.cardTitle}>Data</Text>
           </View>
           <TouchableOpacity 
@@ -210,17 +211,21 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 34,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '300',
+    color: colors.text.primary,
+    letterSpacing: 2,
   },
   glassCard: {
     padding: 20,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: colors.neutral.white,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    shadowColor: colors.warm.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -230,57 +235,62 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '600',
+    color: colors.text.primary,
   },
   cardDescription: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.text.secondary,
     marginBottom: 15,
   },
   actionButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.warm.accent,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
+    shadowColor: colors.warm.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   actionButtonText: {
-    color: '#333',
-    fontWeight: 'bold',
+    color: colors.neutral.white,
+    fontWeight: '600',
     fontSize: 16,
   },
   stopButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.semantic.error,
   },
   dangerButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    backgroundColor: 'rgba(239, 83, 80, 0.1)',
     borderWidth: 1,
-    borderColor: '#FF3B30',
+    borderColor: colors.semantic.error,
   },
   dangerButtonText: {
-    color: '#FF3B30',
-    fontWeight: 'bold',
+    color: colors.semantic.error,
+    fontWeight: '600',
     fontSize: 16,
   },
   progressContainer: {
     marginBottom: 15,
   },
   progressText: {
-    color: '#fff',
+    color: colors.text.primary,
     marginBottom: 5,
   },
   progressBar: {
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.warm.tertiary,
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#34C759',
+    backgroundColor: colors.semantic.success,
   },
   lastIndexedText: {
-    color: 'rgba(255,255,255,0.6)',
+    color: colors.text.tertiary,
     fontSize: 12,
     marginTop: 10,
     textAlign: 'center',
@@ -293,7 +303,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   completeText: {
-    color: '#34C759',
+    color: colors.semantic.success,
     fontSize: 14,
     fontWeight: '600',
   },

@@ -114,6 +114,60 @@ class PhotoService {
   }
 
   /**
+   * Get albums
+   */
+  async getAlbums(): Promise<MediaLibrary.Album[]> {
+    if (!this.permissionGranted) {
+      const granted = await this.requestPermissions();
+      if (!granted) {
+        throw new Error('Media library permissions not granted');
+      }
+    }
+
+    try {
+      return await MediaLibrary.getAlbumsAsync({
+        includeSmartAlbums: true,
+      });
+    } catch (error) {
+      console.error('Error fetching albums:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get photos in album
+   */
+  async getPhotosInAlbum(album: MediaLibrary.Album): Promise<PhotoMetadata[]> {
+    if (!this.permissionGranted) {
+      const granted = await this.requestPermissions();
+      if (!granted) {
+        throw new Error('Media library permissions not granted');
+      }
+    }
+
+    try {
+      const assets = await MediaLibrary.getAssetsAsync({
+        album,
+        mediaType: MediaLibrary.MediaType.photo,
+        first: 100,
+        sortBy: MediaLibrary.SortBy.creationTime,
+      });
+
+      return assets.assets.map((asset) => ({
+        id: asset.id,
+        filePath: asset.uri,
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+        createdAt: asset.creationTime,
+      }));
+    } catch (error) {
+      console.error('Error fetching photos in album:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get photo by ID
    */
   async getPhotoById(id: string): Promise<PhotoMetadata | null> {

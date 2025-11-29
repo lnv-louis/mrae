@@ -13,8 +13,8 @@ export default function ScreenLayout({ children, style }: ScreenLayoutProps) {
 
   return (
     <LinearGradient
-      colors={['#2E1A24', '#E06C55', '#FDFBF7']}
-      locations={[0, 0.45, 0.9]}
+      colors={['#FFF8F3', '#FFEDE3', '#FFE4D6']}
+      locations={[0, 0.5, 1]}
       start={{ x: 0.5, y: 0 }}
       end={{ x: 0.5, y: 1 }}
       style={[styles.container, style]}

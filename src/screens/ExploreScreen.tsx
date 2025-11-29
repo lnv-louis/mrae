@@ -15,8 +15,9 @@ import querySearchService from '../services/querySearchService';
 import speechQueryService from '../services/speechQueryService';
 import { PhotoMetadata } from '../types';
 import ScreenLayout from '../components/ScreenLayout';
+import { colors, spacing, radius } from '../theme';
 
-export default function ExploreScreen() {
+export default function ExploreScreen({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [resultsPhotos, setResultsPhotos] = useState<PhotoMetadata[]>([]);
   const [phrases, setPhrases] = useState<string[]>([]);
@@ -67,8 +68,7 @@ export default function ExploreScreen() {
   };
 
   const handlePhotoPress = (photo: any) => {
-    // TODO: Implement photo detail view
-    console.log('Photo pressed:', photo.id);
+    navigation.navigate('PhotoDetail', { photoId: photo.id, uri: photo.uri });
   };
 
   return (
@@ -83,7 +83,7 @@ export default function ExploreScreen() {
           <TextInput
             style={styles.input}
             placeholder="Search moods, contexts..."
-            placeholderTextColor="rgba(255,255,255,0.6)"
+            placeholderTextColor={colors.text.tertiary}
             value={query}
             onChangeText={setQuery}
             onSubmitEditing={handleSearch}
@@ -192,12 +192,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 34,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '300',
+    color: colors.text.primary,
+    letterSpacing: 2,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.text.secondary,
     marginTop: 5,
   },
   searchWrapper: {
@@ -210,16 +211,22 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     overflow: 'hidden',
     alignItems: 'center',
+    backgroundColor: colors.neutral.white,
+    shadowColor: colors.warm.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   input: {
     flex: 1,
     height: 40,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     paddingHorizontal: 10,
   },
   searchButton: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: colors.warm.tertiary,
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 10,
@@ -227,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   searchButtonText: {
-    color: '#fff',
+    color: colors.warm.accent,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -242,35 +249,40 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: colors.neutral.white,
     width: '100%',
+    shadowColor: colors.warm.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#fff',
+    color: colors.text.primary,
   },
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text.primary,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.text.secondary,
     textAlign: 'center',
   },
   placeholderText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text.primary,
     textAlign: 'center',
     marginBottom: 8,
   },
   placeholderSubtext: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.text.secondary,
     textAlign: 'center',
   },
   resultsHeader: {
@@ -278,13 +290,14 @@ const styles = StyleSheet.create({
   },
   resultsTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '300',
+    color: colors.text.primary,
     marginBottom: 4,
+    letterSpacing: 1,
   },
   count: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.text.secondary,
   },
   phrasesRow: {
     flexDirection: 'row',
@@ -293,29 +306,29 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   phraseChip: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.warm.tertiary,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
   },
   phraseText: {
-    color: '#fff',
+    color: colors.warm.accent,
     fontSize: 12,
     fontWeight: '500',
   },
   transcriptBox: {
     marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.neutral.gray200,
     padding: 10,
     borderRadius: 10,
   },
   transcriptText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 13,
   },
   messageText: {
     marginTop: 6,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.text.tertiary,
     fontSize: 12,
   },
   audioButton: {

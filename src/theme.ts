@@ -1,37 +1,57 @@
 export const colors = {
-  // Sunset Gradient Palette
-  sunset: {
-    dark: '#2E1A24',
-    medium: '#E06C55',
-    light: '#FDFBF7',
-    accent: '#FF6B4A',
+  // Warm Light Palette
+  background: {
+    primary: '#FFF8F3',      // Warm off-white
+    secondary: '#FFF4ED',    // Lighter warm
+    tertiary: '#FFEDE3',     // Peachy light
   },
-  // Neutral Scale (for typography and backgrounds)
+  // Warm Accent Colors
+  warm: {
+    primary: '#FF8A65',      // Warm coral
+    secondary: '#FFAB91',    // Light coral
+    tertiary: '#FFCCBC',     // Pale coral
+    accent: '#FF6E40',       // Vibrant warm orange
+  },
+  // Text Colors (warm tones)
+  text: {
+    primary: '#5D4037',      // Warm dark brown
+    secondary: '#8D6E63',    // Medium brown
+    tertiary: '#A1887F',     // Light brown
+    subtle: '#BCAAA4',       // Very light brown
+  },
+  // Neutral Scale (warm-tinted)
   neutral: {
     white: '#FFFFFF',
-    black: '#1C1C1E',
-    gray100: '#F5F5F7',
-    gray200: '#E5E5EA',
-    gray300: '#D1D1D6',
-    gray400: '#C7C7CC',
-    gray500: '#AEAEB2',
-    gray600: '#8E8E93',
-    gray700: '#636366',
-    gray800: '#48484A',
-    gray900: '#3A3A3C',
+    black: '#3E2723',        // Warm black (dark brown)
+    gray100: '#FFF8F5',
+    gray200: '#F5EBE7',
+    gray300: '#E8DAD4',
+    gray400: '#D7C4BC',
+    gray500: '#BCAAA4',
+    gray600: '#A1887F',
+    gray700: '#8D6E63',
+    gray800: '#6D4C41',
+    gray900: '#5D4037',
   },
-  // Semantic Colors
+  // Semantic Colors (warm-tinted)
   semantic: {
-    success: '#4CD964',
-    error: '#FF3B30',
-    warning: '#FFCC00',
-    info: '#5856D6',
+    success: '#66BB6A',
+    error: '#EF5350',
+    warning: '#FFA726',
+    info: '#42A5F5',
   },
-  // Glassmorphism
+  // Legacy sunset for compatibility
+  sunset: {
+    dark: '#5D4037',
+    medium: '#FF8A65',
+    light: '#FFF8F3',
+    accent: '#FF6E40',
+  },
+  // Glassmorphism (warm-tinted)
   glass: {
-    light: 'rgba(255, 255, 255, 0.2)',
-    heavy: 'rgba(255, 255, 255, 0.1)',
-    border: 'rgba(255, 255, 255, 0.3)',
+    light: 'rgba(255, 138, 101, 0.1)',
+    heavy: 'rgba(255, 138, 101, 0.05)',
+    border: 'rgba(255, 138, 101, 0.2)',
   },
 } as const;
 
