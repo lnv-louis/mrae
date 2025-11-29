@@ -1,15 +1,25 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
+import ScreenLayout from '../components/ScreenLayout';
 
 export default function CleanScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Clean</Text>
-      <Text style={styles.subtitle}>Garbage Collection</Text>
-      <Text style={styles.placeholder}>
-        Swipe through photos to mark them for deletion. Learn from your preferences.
-      </Text>
-    </View>
+    <ScreenLayout>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Smart Cleaner</Text>
+          <Text style={styles.subtitle}>Swipe to clean</Text>
+        </View>
+
+        <BlurView intensity={20} style={styles.card}>
+          <View style={styles.placeholderImage} />
+          <Text style={styles.instruction}>
+            Swipe Left to Delete, Right to Keep
+          </Text>
+        </BlurView>
+      </View>
+    </ScreenLayout>
   );
 }
 
@@ -19,22 +29,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#fff',
+  },
+  header: {
+    marginBottom: 30,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: 34,
     fontWeight: 'bold',
-    marginBottom: 8,
+    color: '#fff',
   },
   subtitle: {
     fontSize: 18,
-    color: '#666',
-    marginBottom: 16,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 5,
   },
-  placeholder: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
+  card: {
+    width: '100%',
+    aspectRatio: 3/4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    overflow: 'hidden',
+  },
+  placeholderImage: {
+    width: '100%',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 15,
+    marginBottom: 20,
+  },
+  instruction: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
-

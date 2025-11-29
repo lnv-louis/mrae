@@ -8,9 +8,11 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import PhotoGrid from '../components/PhotoGrid';
 import photoService from '../services/photoService';
 import { PhotoMetadata } from '../types';
+import ScreenLayout from '../components/ScreenLayout';
 
 export default function GalleryScreen() {
   const [photos, setPhotos] = useState<PhotoMetadata[]>([]);
@@ -47,49 +49,56 @@ export default function GalleryScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingText}>Loading photos...</Text>
-      </View>
+      <ScreenLayout>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>Loading photos...</Text>
+        </View>
+      </ScreenLayout>
     );
   }
 
   if (photos.length === 0) {
     return (
-      <ScrollView
-        contentContainerStyle={styles.center}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <Text style={styles.emptyText}>No photos found</Text>
-        <Text style={styles.emptySubtext}>
-          Grant permissions to access your photo library
-        </Text>
-      </ScrollView>
+      <ScreenLayout>
+        <ScrollView
+          contentContainerStyle={styles.center}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
+          }
+        >
+          <BlurView intensity={20} style={styles.glassCard}>
+            <Text style={styles.emptyText}>No photos found</Text>
+            <Text style={styles.emptySubtext}>
+              Grant permissions to access your photo library
+            </Text>
+          </BlurView>
+        </ScrollView>
+      </ScreenLayout>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Gallery</Text>
-        <Text style={styles.count}>{photos.length} photos</Text>
-      </View>
-      <PhotoGrid photos={photos} onPhotoPress={handlePhotoPress} />
-    </ScrollView>
+    <ScreenLayout>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Gallery</Text>
+          <Text style={styles.count}>{photos.length} photos</Text>
+        </View>
+        <PhotoGrid photos={photos} onPhotoPress={handlePhotoPress} />
+      </ScrollView>
+    </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
+  scrollContent: {
+    paddingBottom: 100, // Space for tab bar
   },
   center: {
     flex: 1,
@@ -98,33 +107,46 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    padding: 20,
+    marginTop: 40,
   },
   title: {
-    fontSize: 24,
+    fontSize: 34,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: '#fff',
+    marginBottom: 5,
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   count: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: 10,
+    color: '#fff',
     fontSize: 16,
-    color: '#666',
+  },
+  glassCard: {
+    padding: 30,
+    borderRadius: 20,
+    overflow: 'hidden',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: '80%',
   },
   emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 10,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
   },
 });
+
 

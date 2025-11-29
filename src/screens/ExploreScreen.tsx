@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,11 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import PhotoGrid from '../components/PhotoGrid';
 import searchService from '../services/searchService';
 import { SearchResult } from '../types';
+import ScreenLayout from '../components/ScreenLayout';
 
 export default function ExploreScreen() {
   const [query, setQuery] = useState('');
@@ -44,49 +46,59 @@ export default function ExploreScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Search photos by description..."
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-        <TouchableOpacity
-          style={styles.searchButton}
-          onPress={handleSearch}
-          disabled={searching}
-        >
-          {searching ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.searchButtonText}>Search</Text>
-          )}
-        </TouchableOpacity>
+    <ScreenLayout>
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerTitle}>Explore</Text>
+        <Text style={styles.headerSubtitle}>Semantic Photo Finding</Text>
+      </View>
+
+      <View style={styles.searchWrapper}>
+        <BlurView intensity={30} tint="light" style={styles.searchBlur}>
+          <TextInput
+            style={styles.input}
+            placeholder="Search moods, contexts..."
+            placeholderTextColor="rgba(255,255,255,0.6)"
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={handleSearch}
+            disabled={searching}
+          >
+            {searching ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.searchButtonText}>Search</Text>
+            )}
+          </TouchableOpacity>
+        </BlurView>
       </View>
 
       {searching && (
         <View style={styles.center}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color="#fff" />
           <Text style={styles.loadingText}>Searching...</Text>
         </View>
       )}
 
       {!searching && hasSearched && results.length === 0 && (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>No results found</Text>
-          <Text style={styles.emptySubtext}>
-            Try a different search query or index your photos first
-          </Text>
+          <BlurView intensity={20} style={styles.glassCard}>
+            <Text style={styles.emptyText}>No results found</Text>
+            <Text style={styles.emptySubtext}>
+              Try a different search query or index your photos first
+            </Text>
+          </BlurView>
         </View>
       )}
 
       {!searching && results.length > 0 && (
-        <ScrollView style={styles.resultsContainer}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Search Results</Text>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.resultsHeader}>
+            <Text style={styles.resultsTitle}>Search Results</Text>
             <Text style={styles.count}>{results.length} photos found</Text>
           </View>
           <PhotoGrid
@@ -96,71 +108,71 @@ export default function ExploreScreen() {
         </ScrollView>
       )}
 
-      {!hasSearched && (
+      {!hasSearched && !searching && (
         <View style={styles.center}>
-          <Text style={styles.placeholderText}>
-            Enter a search query to find photos semantically
-          </Text>
-          <Text style={styles.placeholderSubtext}>
-            Example: "sunset with people", "dog playing", "food"
-          </Text>
+          <BlurView intensity={20} style={styles.glassCard}>
+            <Text style={styles.placeholderText}>
+              Find photos by mood & context
+            </Text>
+            <Text style={styles.placeholderSubtext}>
+              Example: "sunset with people", "dog playing", "food"
+            </Text>
+          </BlurView>
         </View>
       )}
-    </View>
+    </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
+  scrollContent: {
+    paddingBottom: 100,
   },
-  searchContainer: {
+  headerContainer: {
+    marginTop: 40,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 34,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 5,
+  },
+  searchWrapper: {
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  searchBlur: {
     flexDirection: 'row',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    gap: 8,
+    padding: 10,
+    borderRadius: 15,
+    overflow: 'hidden',
+    alignItems: 'center',
   },
   input: {
     flex: 1,
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    height: 40,
+    color: '#fff',
     fontSize: 16,
+    paddingHorizontal: 10,
   },
   searchButton: {
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 80,
   },
   searchButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  resultsContainer: {
-    flex: 1,
-  },
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  count: {
     fontSize: 14,
-    color: '#666',
+    fontWeight: '600',
   },
   center: {
     flex: 1,
@@ -168,31 +180,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  glassCard: {
+    padding: 30,
+    borderRadius: 20,
+    overflow: 'hidden',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: '100%',
+  },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    color: '#fff',
   },
   emptyText: {
     fontSize: 18,
-    color: '#666',
+    fontWeight: '600',
+    color: '#fff',
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
   },
   placeholderText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
     textAlign: 'center',
     marginBottom: 8,
   },
   placeholderSubtext: {
     fontSize: 14,
-    color: '#999',
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
   },
+  resultsHeader: {
+    padding: 20,
+  },
+  resultsTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  count: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
 });
-

@@ -1,13 +1,9 @@
-import { CactusSTT } from 'cactus-react-native';
 
 class TranscriptionService {
-  private stt: CactusSTT | null = null;
   private initialized = false;
 
   async initialize(model: string = 'whisper-small'): Promise<void> {
-    if (this.initialized && this.stt) return;
-    this.stt = new CactusSTT({ model });
-    await this.stt.init();
+    console.log('Initializing Transcription Service (Mocked)...');
     this.initialized = true;
   }
 
@@ -16,20 +12,15 @@ class TranscriptionService {
     onToken?: (token: string) => void,
     language: string = 'en'
   ): Promise<{ response: string }> {
-    if (!this.stt || !this.initialized) {
+    if (!this.initialized) {
       await this.initialize();
     }
-    const prompt = `<|startoftranscript|><|${language}|><|transcribe|><|notimestamps|>`;
-    const result = await this.stt!.transcribe({ audioFilePath, onToken, prompt });
-    return { response: result.response };
+    console.log('Transcribing audio (Mocked) for:', audioFilePath);
+    return { response: "This is a mocked transcription response." };
   }
 
   async destroy(): Promise<void> {
-    if (this.stt) {
-      await this.stt.destroy();
-      this.stt = null;
-      this.initialized = false;
-    }
+    this.initialized = false;
   }
 }
 

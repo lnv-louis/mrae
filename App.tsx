@@ -1,14 +1,15 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Text } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 
 import GalleryScreen from './src/screens/GalleryScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import CreativeScreen from './src/screens/CreativeScreen';
-import CleanScreen from './src/screens/CleanScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -18,54 +19,63 @@ export default function App() {
     <SafeAreaProvider>
       <NavigationContainer>
         <Tab.Navigator
-          screenOptions={{
+          screenOptions={({ route }) => ({
             headerShown: true,
-            tabBarActiveTintColor: '#000',
-            tabBarInactiveTintColor: '#666',
-            tabBarLabelStyle: {
-              fontSize: 12,
+            headerTransparent: true,
+            headerBackground: () => (
+              <BlurView tint="light" intensity={80} style={StyleSheet.absoluteFill} />
+            ),
+            tabBarActiveTintColor: '#007AFF',
+            tabBarInactiveTintColor: '#8E8E93',
+            tabBarStyle: {
+              position: 'absolute',
+              backgroundColor: 'transparent',
+              borderTopWidth: 0,
+              elevation: 0,
+              height: 85,
+              paddingBottom: 20,
             },
-          }}
+            tabBarBackground: () => (
+              <BlurView tint="light" intensity={85} style={StyleSheet.absoluteFill} />
+            ),
+            tabBarIcon: ({ focused, color, size }) => {
+              let iconName: keyof typeof Ionicons.glyphMap;
+
+              if (route.name === 'Gallery') {
+                iconName = focused ? 'images' : 'images-outline';
+              } else if (route.name === 'Explore') {
+                iconName = focused ? 'compass' : 'compass-outline';
+              } else if (route.name === 'Creative') {
+                iconName = focused ? 'create' : 'create-outline';
+              } else if (route.name === 'Settings') {
+                iconName = focused ? 'settings' : 'settings-outline';
+              } else {
+                iconName = 'help';
+              }
+
+              return <Ionicons name={iconName} size={size} color={color} />;
+            },
+          })}
         >
           <Tab.Screen 
             name="Gallery" 
             component={GalleryScreen}
-            options={{ 
-              title: 'Gallery',
-              tabBarIcon: () => <Text>📷</Text>,
-            }}
+            options={{ title: 'Gallery' }}
           />
           <Tab.Screen 
             name="Explore" 
             component={ExploreScreen}
-            options={{ 
-              title: 'Explore',
-              tabBarIcon: () => <Text>🔍</Text>,
-            }}
+            options={{ title: 'Explore' }}
           />
           <Tab.Screen 
             name="Creative" 
             component={CreativeScreen}
-            options={{ 
-              title: 'Creative',
-              tabBarIcon: () => <Text>✨</Text>,
-            }}
-          />
-          <Tab.Screen 
-            name="Clean" 
-            component={CleanScreen}
-            options={{ 
-              title: 'Clean',
-              tabBarIcon: () => <Text>🗑️</Text>,
-            }}
+            options={{ title: 'Creative' }}
           />
           <Tab.Screen 
             name="Settings" 
             component={SettingsScreen}
-            options={{ 
-              title: 'Settings',
-              tabBarIcon: () => <Text>⚙️</Text>,
-            }}
+            options={{ title: 'Settings' }}
           />
         </Tab.Navigator>
       </NavigationContainer>
@@ -73,4 +83,5 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
 

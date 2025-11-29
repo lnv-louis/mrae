@@ -1,162 +1,83 @@
-import { CactusLM, type CactusLMEmbedResult } from 'cactus-react-native';
 import { EmbeddingResult } from '../types';
 
 class EmbeddingService {
-  private textModel: CactusLM | null = null;
-  private imageModel: CactusLM | null = null;
   private textModelInitialized = false;
   private imageModelInitialized = false;
 
   /**
-   * Initialize text embedding model (Qwen3)
+   * Initialize text embedding model (MOCKED for Expo Go)
    */
   async initializeTextModel(model: string = 'qwen3-0.6'): Promise<void> {
-    if (this.textModelInitialized && this.textModel) {
-      return;
-    }
-
-    try {
-      this.textModel = new CactusLM({ model });
-      
-      // Check if model is downloaded
-      const models = await this.textModel.getModels();
-      const targetModel = models.find(m => m.slug === model || m.name === model);
-      
-      if (!targetModel?.isDownloaded) {
-        console.log(`Downloading text model: ${model}`);
-        await this.textModel.download({
-          onProgress: (progress) => {
-            console.log(`Text model download: ${Math.round(progress * 100)}%`);
-          },
-        });
-      }
-
-      this.textModelInitialized = true;
-      console.log(`Text model ${model} initialized`);
-    } catch (error) {
-      console.error('Error initializing text model:', error);
-      throw error;
-    }
+    console.log('Initializing Text Model (Mocked)...');
+    // Simulate initialization delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    this.textModelInitialized = true;
+    console.log('Text model initialized (Mocked)');
   }
 
   /**
-   * Initialize image embedding model (Vision model)
+   * Initialize image embedding model (MOCKED for Expo Go)
    */
   async initializeImageModel(model: string = 'lfm2-vl-450m'): Promise<void> {
-    if (this.imageModelInitialized && this.imageModel) {
-      return;
-    }
-
-    try {
-      this.imageModel = new CactusLM({ model });
-      
-      // Check if model is downloaded
-      const models = await this.imageModel.getModels();
-      const targetModel = models.find(m => m.slug === model || m.name === model);
-      
-      if (!targetModel?.isDownloaded) {
-        console.log(`Downloading image model: ${model}`);
-        await this.imageModel.download({
-          onProgress: (progress) => {
-            console.log(`Image model download: ${Math.round(progress * 100)}%`);
-          },
-        });
-      }
-
-      this.imageModelInitialized = true;
-      console.log(`Image model ${model} initialized`);
-    } catch (error) {
-      console.error('Error initializing image model:', error);
-      throw error;
-    }
+    console.log('Initializing Image Model (Mocked)...');
+    // Simulate initialization delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    this.imageModelInitialized = true;
+    console.log('Image model initialized (Mocked)');
   }
 
   /**
-   * Generate text embedding
+   * Generate text embedding (MOCKED)
    */
   async embedText(text: string): Promise<EmbeddingResult> {
-    if (!this.textModel || !this.textModelInitialized) {
+    if (!this.textModelInitialized) {
       await this.initializeTextModel();
     }
 
-    try {
-      const result: CactusLMEmbedResult = await this.textModel!.embed({ text });
-      return {
-        embedding: result.embedding,
-        success: true,
-      };
-    } catch (error) {
-      console.error('Error generating text embedding:', error);
-      return {
-        embedding: [],
-        success: false,
-      };
-    }
+    console.log('Generating text embedding (Mocked) for:', text);
+    // Return a random dummy vector
+    const dummyEmbedding = Array(384).fill(0).map(() => Math.random());
+    return {
+      embedding: dummyEmbedding,
+      success: true,
+    };
   }
 
   /**
-   * Generate image embedding
+   * Generate image embedding (MOCKED)
    */
   async embedImage(imagePath: string): Promise<EmbeddingResult> {
-    if (!this.imageModel || !this.imageModelInitialized) {
+    if (!this.imageModelInitialized) {
       await this.initializeImageModel();
     }
 
-    try {
-      const result = await this.imageModel!.imageEmbed({ imagePath });
-      return {
-        embedding: result.embedding,
-        success: true,
-      };
-    } catch (error) {
-      console.error('Error generating image embedding:', error);
-      return {
-        embedding: [],
-        success: false,
-      };
-    }
+    console.log('Generating image embedding (Mocked) for:', imagePath);
+    // Return a random dummy vector
+    const dummyEmbedding = Array(384).fill(0).map(() => Math.random());
+    return {
+      embedding: dummyEmbedding,
+      success: true,
+    };
   }
 
   /**
-   * Generate caption for image using vision model
+   * Generate caption for image using vision model (MOCKED)
    */
   async generateCaption(imagePath: string): Promise<string | null> {
-    if (!this.imageModel || !this.imageModelInitialized) {
+    if (!this.imageModelInitialized) {
       await this.initializeImageModel();
     }
-
-    try {
-      const result = await this.imageModel!.complete({
-        messages: [
-          {
-            role: 'user',
-            content: 'Describe this image in one sentence.',
-            images: [imagePath],
-          },
-        ],
-      });
-
-      return result.response || null;
-    } catch (error) {
-      console.error('Error generating caption:', error);
-      return null;
-    }
+    
+    console.log('Generating caption (Mocked) for:', imagePath);
+    return "A beautiful photo (Mocked Caption)";
   }
 
   /**
    * Clean up resources
    */
   async destroy(): Promise<void> {
-    if (this.textModel) {
-      await this.textModel.destroy();
-      this.textModel = null;
-      this.textModelInitialized = false;
-    }
-    if (this.imageModel) {
-      await this.imageModel.destroy();
-      this.imageModel = null;
-      this.imageModelInitialized = false;
-    }
+    this.textModelInitialized = false;
+    this.imageModelInitialized = false;
   }
 }
 
