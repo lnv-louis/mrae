@@ -1,5 +1,6 @@
 import { EmbeddingResult } from '../types';
 import cactusService from './cactusService';
+import databaseService from './databaseService';
 import geminiService from './geminiService';
 
 class EmbeddingService {
@@ -68,12 +69,37 @@ class EmbeddingService {
    * Generate caption for image using vision model (MOCKED)
    */
   async generateCaption(imagePath: string): Promise<string | null> {
-    if (!this.imageModelInitialized) {
-      await this.initializeImageModel();
+    if (!cactusService.available()) {
+      if (!this.imageModelInitialized) {
+        await this.initializeImageModel();
+      }
+      return "A photo";
     }
-    
-    console.log('Generating caption (Mocked) for:', imagePath);
-    return "A beautiful photo (Mocked Caption)";
+    const text = await cactusService.analyzeImage(imagePath, "Describe the image in one concise sentence.");
+    return text || null;
+  }
+
+  async generateCaptionWithContext(ref: { id?: string; uri?: string }): Promise<{ caption: string | null; city?: string | null; time?: string | null }> {
+    let row: any | null = null;
+    if (ref.id) {
+      const rows = await databaseService.getAll('SELECT uri, city, timestamp FROM image_index WHERE id = ?', [ref.id]);
+      row = rows?.[0] || null;
+    }
+    if (!row && ref.uri) {
+      const rows = await databaseService.getAll('SELECT uri, city, timestamp FROM image_index WHERE uri = ?', [ref.uri]);
+      row = rows?.[0] || null;
+    }
+    const uri = row?.uri || ref.uri || null;
+    if (!uri) {
+      return { caption: null, city: null, time: null };
+    }
+    const city = row?.city ?? null;
+    const ts = typeof row?.timestamp === 'number' ? row.timestamp : null;
+    const time = ts ? new Date(ts).toLocaleString() : null;
+    const ctx = `Location: ${city ?? 'Unknown'}; Time: ${time ?? 'Unknown'}.`;
+    const prompt = `Using the context (${ctx}) generate a natural, concise caption describing the image.`;
+    const text = await cactusService.analyzeImage(uri, prompt);
+    return { caption: text || null, city, time };
   }
 
   /**

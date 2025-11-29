@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated as RNAnimated } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
-import { useGoogleAuth } from '../services/authService';
 import photoService from '../services/photoService';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { 
@@ -55,7 +54,6 @@ const LoadingNode = ({ delay, x, y }: { delay: number, x: number, y: number }) =
 };
 
 export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
-  const { promptAsync, accessToken } = useGoogleAuth();
   const [step, setStep] = React.useState<'welcome' | 'connect' | 'indexing'>('welcome');
   const [indexingStats, setIndexingStats] = React.useState({ processed: 0, total: 0 });
 
@@ -83,12 +81,7 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
     }
   };
 
-  const handleConnectGoogle = async () => {
-    await promptAsync();
-    // Wait for effect in authService to set token, then proceed
-    // For UX, we'll just jump to indexing if prompt returns (in real app verify token)
-    setStep('indexing');
-  };
+  
 
   if (step === 'welcome') {
     return (
@@ -115,15 +108,6 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
       <View style={styles.container}>
         <Animated.Text entering={FadeInDown} style={styles.titleSmall}>Connect Sources</Animated.Text>
         <View style={styles.optionsContainer}>
-          <TouchableOpacity style={styles.optionCard} onPress={handleConnectGoogle}>
-            <Ionicons name="logo-google" size={32} color={colors.neutral.black} />
-            <View style={styles.optionText}>
-              <Text style={styles.optionTitle}>Google Photos</Text>
-              <Text style={styles.optionDesc}>Sync your cloud library</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={24} color={colors.neutral.gray400} />
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.optionCard} onPress={handleConnectLocal}>
             <Ionicons name="images" size={32} color={colors.neutral.black} />
             <View style={styles.optionText}>
@@ -259,4 +243,3 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 });
-

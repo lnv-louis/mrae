@@ -18,6 +18,7 @@ export default function SettingsScreen({ navigation }: any) {
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
   const [lastIndexed, setLastIndexed] = useState<number | null>(null);
+  const [hasShownComplete, setHasShownComplete] = useState(false);
 
   useEffect(() => {
     loadStatus();
@@ -30,6 +31,11 @@ export default function SettingsScreen({ navigation }: any) {
     setIsIndexing(status.isIndexing);
     setIndexingProgress(status.progress);
     setLastIndexed(status.lastIndexed);
+    const done = !status.isIndexing && status.progress && status.progress.total > 0 && status.progress.processed >= status.progress.total;
+    if (done && !hasShownComplete) {
+      Alert.alert('Indexing Complete', 'Your photos are indexed. Search is ready.');
+      setHasShownComplete(true);
+    }
   };
 
   const handleStartIndexing = async () => {
@@ -124,6 +130,12 @@ export default function SettingsScreen({ navigation }: any) {
             <Ionicons name="scan-outline" size={24} color="#fff" />
             <Text style={styles.cardTitle}>AI Indexing</Text>
           </View>
+          {!isIndexing && indexingProgress && indexingProgress.total > 0 && indexingProgress.processed >= indexingProgress.total && (
+            <View style={styles.completeBanner}>
+              <Ionicons name="checkmark-circle" size={18} color="#34C759" />
+              <Text style={styles.completeText}>Indexing Complete • Search Ready</Text>
+            </View>
+          )}
           
           {isIndexing && indexingProgress && (
             <View style={styles.progressContainer}>
@@ -272,5 +284,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 10,
     textAlign: 'center',
+  },
+  completeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    marginBottom: 10,
+  },
+  completeText: {
+    color: '#34C759',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

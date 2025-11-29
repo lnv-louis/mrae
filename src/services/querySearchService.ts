@@ -7,6 +7,7 @@ type ExpandedResult = {
   uri: string;
   score: number;
   phrase: string;
+  timestamp: number;
 };
 
 const MIN_SCORE_THRESHOLD = 0.25;
@@ -76,8 +77,8 @@ export async function searchByExpandedText(
     return { results: [], phrases, message: 'No embeddings for phrases' };
   }
 
-  const rows = await databaseService.getAll('SELECT id, uri, embedding FROM image_index');
-  const candidates = rows.map((row: any) => ({ id: row.id, uri: row.uri, emb: toFloat32(row.embedding) }));
+  const rows = await databaseService.getAll('SELECT id, uri, embedding, timestamp FROM image_index');
+  const candidates = rows.map((row: any) => ({ id: row.id, uri: row.uri, emb: toFloat32(row.embedding), timestamp: row.timestamp as number }));
   if (candidates.length === 0) {
     return { results: [], phrases, message: 'No indexed images' };
   }
@@ -92,7 +93,7 @@ export async function searchByExpandedText(
         bestPhrase = phrases[i];
       }
     }
-    return { id: c.id, uri: c.uri, score: best, phrase: bestPhrase };
+    return { id: c.id, uri: c.uri, score: best, phrase: bestPhrase, timestamp: c.timestamp };
   });
 
   const filtered = scored.filter((r) => r.score >= threshold);
@@ -163,8 +164,8 @@ export async function searchByHybridText(
     params.push(structured.endMs);
   }
   const where = conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '';
-  const rows = await databaseService.getAll(`SELECT id, uri, embedding FROM image_index${where}`, params);
-  const candidates = rows.map((row: any) => ({ id: row.id, uri: row.uri, emb: toFloat32(row.embedding) }));
+  const rows = await databaseService.getAll(`SELECT id, uri, embedding, timestamp FROM image_index${where}`, params);
+  const candidates = rows.map((row: any) => ({ id: row.id, uri: row.uri, emb: toFloat32(row.embedding), timestamp: row.timestamp as number }));
   if (candidates.length === 0) {
     return { results: [], phrases, filters: structured, message: 'No candidates' };
   }
@@ -178,7 +179,7 @@ export async function searchByHybridText(
         bestPhrase = phrases[i];
       }
     }
-    return { id: c.id, uri: c.uri, score: best, phrase: bestPhrase };
+    return { id: c.id, uri: c.uri, score: best, phrase: bestPhrase, timestamp: c.timestamp };
   });
   const filtered = scored.filter((r) => r.score >= threshold);
   filtered.sort((a, b) => b.score - a.score);

@@ -7,9 +7,9 @@ export async function searchByAudio(
 ): Promise<{
   transcript: string;
   phrases: string[];
-  results: Array<{ id: string; uri: string; score: number; phrase: string }>;
+  results: Array<{ id: string; uri: string; score: number; phrase: string; timestamp: number }>;
   message: string;
-}> {
+}>{
   const lang = options?.language || 'en';
   const t = await transcriptionService.transcribe(audioFilePath, undefined, lang);
   const text = t?.response || '';
@@ -29,4 +29,3 @@ export async function searchByAudio(
 }
 
 export default { searchByAudio };
-

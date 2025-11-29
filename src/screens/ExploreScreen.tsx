@@ -11,13 +11,17 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import PhotoGrid from '../components/PhotoGrid';
-import searchService from '../services/searchService';
-import { SearchResult } from '../types';
+import querySearchService from '../services/querySearchService';
+import speechQueryService from '../services/speechQueryService';
+import { PhotoMetadata } from '../types';
 import ScreenLayout from '../components/ScreenLayout';
 
 export default function ExploreScreen() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [resultsPhotos, setResultsPhotos] = useState<PhotoMetadata[]>([]);
+  const [phrases, setPhrases] = useState<string[]>([]);
+  const [transcript, setTranscript] = useState('');
+  const [message, setMessage] = useState('');
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -30,11 +34,33 @@ export default function ExploreScreen() {
     try {
       setSearching(true);
       setHasSearched(true);
-      const searchResults = await searchService.searchByText(query.trim());
-      setResults(searchResults);
+      const res = await querySearchService.searchByExpandedText(query.trim());
+      const photos = res.results.map((r) => ({ id: r.id, uri: r.uri, createdAt: r.timestamp } as PhotoMetadata));
+      setResultsPhotos(photos);
+      setPhrases(res.phrases);
+      setMessage(res.message);
+      setTranscript('');
     } catch (error) {
       console.error('Error searching:', error);
       Alert.alert('Error', 'Failed to search photos');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleAudioSearch = async () => {
+    try {
+      setSearching(true);
+      setHasSearched(true);
+      const res = await speechQueryService.searchByAudio('mock://audio');
+      const photos = res.results.map((r) => ({ id: r.id, uri: r.uri, createdAt: r.timestamp } as PhotoMetadata));
+      setResultsPhotos(photos);
+      setPhrases(res.phrases);
+      setTranscript(res.transcript);
+      setMessage(res.message);
+    } catch (error) {
+      console.error('Error audio searching:', error);
+      Alert.alert('Error', 'Failed to search by audio');
     } finally {
       setSearching(false);
     }
@@ -74,6 +100,17 @@ export default function ExploreScreen() {
               <Text style={styles.searchButtonText}>Search</Text>
             )}
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.searchButton, styles.audioButton]}
+            onPress={handleAudioSearch}
+            disabled={searching}
+          >
+            {searching ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.searchButtonText}>Audio</Text>
+            )}
+          </TouchableOpacity>
         </BlurView>
       </View>
 
@@ -84,25 +121,45 @@ export default function ExploreScreen() {
         </View>
       )}
 
-      {!searching && hasSearched && results.length === 0 && (
+      {!searching && hasSearched && resultsPhotos.length === 0 && (
         <View style={styles.center}>
           <BlurView intensity={20} style={styles.glassCard}>
             <Text style={styles.emptyText}>No results found</Text>
             <Text style={styles.emptySubtext}>
               Try a different search query or index your photos first
             </Text>
+            {!!message && (
+              <Text style={[styles.emptySubtext, { marginTop: 6 }]}>{message}</Text>
+            )}
           </BlurView>
         </View>
       )}
 
-      {!searching && results.length > 0 && (
+      {!searching && resultsPhotos.length > 0 && (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.resultsHeader}>
             <Text style={styles.resultsTitle}>Search Results</Text>
-            <Text style={styles.count}>{results.length} photos found</Text>
+            <Text style={styles.count}>{resultsPhotos.length} photos found</Text>
+            {phrases.length > 0 && (
+              <View style={styles.phrasesRow}>
+                {phrases.map((p) => (
+                  <View key={p} style={styles.phraseChip}>
+                    <Text style={styles.phraseText}>{p}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {!!transcript && (
+              <View style={styles.transcriptBox}>
+                <Text style={styles.transcriptText}>{transcript}</Text>
+              </View>
+            )}
+            {!!message && (
+              <Text style={styles.messageText}>{message}</Text>
+            )}
           </View>
           <PhotoGrid
-            photos={results.map((r) => r.photo)}
+            photos={resultsPhotos}
             onPhotoPress={handlePhotoPress}
           />
         </ScrollView>
@@ -228,5 +285,40 @@ const styles = StyleSheet.create({
   count: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
+  },
+  phrasesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  phraseChip: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  phraseText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  transcriptBox: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 10,
+    borderRadius: 10,
+  },
+  transcriptText: {
+    color: '#fff',
+    fontSize: 13,
+  },
+  messageText: {
+    marginTop: 6,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+  },
+  audioButton: {
+    marginLeft: 8,
   },
 });

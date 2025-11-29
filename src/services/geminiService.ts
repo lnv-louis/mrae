@@ -1,4 +1,5 @@
 import { GeminiContent, GeminiGenerateResponse, GeminiPart } from '../types';
+import geoService from './geoService';
 import Constants from 'expo-constants';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -50,8 +51,11 @@ class GeminiService {
       return null;
     }
     try {
+      const cities = await geoService.getVisitedCities(50);
+      const contextPrefix = cities && cities.length > 0 ? [{ role: 'user' as const, content: `User visited cities: ${cities.join(', ')}.` }] : [];
+      const augmented = contextPrefix.length ? [...contextPrefix, ...messages] : messages;
       const url = `${GEMINI_API_BASE}/${model}:generateContent`;
-      const contents = this.transformMessages(messages);
+      const contents = this.transformMessages(augmented);
       const response = await fetch(url, {
         method: 'POST',
         headers: {

@@ -25,5 +25,24 @@ export async function reverseGeocodeToCity(lat: number, lon: number): Promise<st
   return city;
 }
 
-export default { reverseGeocodeToCity };
+import databaseService from './databaseService';
 
+export async function getVisitedCities(limit: number = 50): Promise<string[]> {
+  const rows = await databaseService.getAll(
+    'SELECT city, COUNT(*) as c FROM image_index WHERE city IS NOT NULL AND city <> "" GROUP BY city ORDER BY c DESC LIMIT ?',
+    [limit]
+  );
+  const cities = rows.map((r: any) => String(r.city)).filter((s) => s && s.trim().length > 0);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const c of cities) {
+    const key = c.trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(key);
+    }
+  }
+  return unique;
+}
+
+export default { reverseGeocodeToCity, getVisitedCities };
