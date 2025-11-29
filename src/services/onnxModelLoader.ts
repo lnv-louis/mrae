@@ -15,17 +15,41 @@ async function loadOnnxModel(modelFilename: string): Promise<any | null> {
   }
 
   try {
-    const onnxruntime = require('onnxruntime-react-native');
+    // Use a function to safely require the module to prevent load-time errors
+    const loadOnnxModule = () => {
+      try {
+        return require('onnxruntime-react-native');
+      } catch (e: any) {
+        // Suppress the "install" error that happens at module load
+        if (e?.message?.includes('install') || e?.message?.includes('null')) {
+          return null;
+        }
+        throw e;
+      }
+    };
+    
+    const onnxruntime = loadOnnxModule();
     
     // Check if native module is properly initialized
-    if (!onnxruntime || !onnxruntime.InferenceSession) {
-      console.warn('⚠️ ONNX Runtime native module not initialized');
+    if (!onnxruntime || typeof onnxruntime !== 'object') {
+      console.warn('⚠️ ONNX Runtime module not properly loaded');
+      return null;
+    }
+    
+    // Check if InferenceSession exists and is a function
+    if (!onnxruntime.InferenceSession || typeof onnxruntime.InferenceSession !== 'function') {
+      console.warn('⚠️ ONNX Runtime InferenceSession not available');
       return null;
     }
     
     InferenceSession = onnxruntime.InferenceSession;
   } catch (e: any) {
-    console.warn('⚠️ onnxruntime-react-native not available:', e?.message);
+    // Suppress the "install" error - it's a known issue with onnxruntime-react-native
+    if (e?.message?.includes('install') || e?.message?.includes('null')) {
+      console.warn('⚠️ ONNX Runtime native module not initialized (install error suppressed)');
+    } else {
+      console.warn('⚠️ onnxruntime-react-native not available:', e?.message || e);
+    }
     return null;
   }
 

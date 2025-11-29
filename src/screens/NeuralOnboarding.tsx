@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, Alert } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme';
 import photoService from '../services/photoService';
 import indexingService from '../services/indexingService';
@@ -153,6 +153,7 @@ const PARTICLE_COLORS = [
   '#FFE0B2', // Light amber
 ];
 
+
 // Main particle field - NO CIRCLES, just particles
 const ParticleField = ({ progress }: { progress: number }) => {
   const progressValue = useSharedValue(0);
@@ -235,9 +236,6 @@ const ParticleField = ({ progress }: { progress: number }) => {
       <Animated.View style={[styles.progressWave, waveStyle]} />
       <Animated.View style={[styles.progressWave2, waveStyle]} />
       
-      {/* Central subtle glow - NO ugly circles */}
-      <View style={styles.centerDot} />
-      
       {/* All the particles */}
       {particles.map((particle) => (
         <ElegantParticle key={particle.id} {...particle} />
@@ -246,14 +244,49 @@ const ParticleField = ({ progress }: { progress: number }) => {
   );
 };
 
+// Rotating phrases for indexing
+const INDEXING_PHRASES = [
+  'Building your visual memory...',
+  'Analyzing image patterns...',
+  'Creating semantic connections...',
+  'MRAE: Your external memory, reimagined',
+  'Mapping visual relationships...',
+  'Learning from your photos...',
+  'Indexing neural pathways...',
+  'Extracting visual features...',
+  'Connecting memories...',
+  'Building the intelligence layer...',
+  'Processing visual data...',
+  'Organizing your gallery...',
+  'Understanding your photos...',
+  'Creating searchable memories...',
+  'Training the AI model...',
+  'Generating embeddings...',
+  'Building the knowledge graph...',
+  'Your photos are being indexed...',
+  'Almost there...',
+  'Finalizing your memory index...',
+];
+
 export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
-  const [step, setStep] = useState<'welcome' | 'connect' | 'indexing'>('welcome');
+  const [step, setStep] = useState<'welcome' | 'indexing'>('welcome');
   const [indexingStats, setIndexingStats] = useState({ processed: 0, total: 0 });
   const [currentPhoto, setCurrentPhoto] = useState<string>('');
+  const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
 
   useEffect(() => {
     if (step === 'indexing') {
       startRealIndexing();
+    }
+  }, [step]);
+
+  // Rotate phrases during indexing
+  useEffect(() => {
+    if (step === 'indexing') {
+      const interval = setInterval(() => {
+        setCurrentPhraseIndex((prev) => (prev + 1) % INDEXING_PHRASES.length);
+      }, 2500);
+      return () => clearInterval(interval);
     }
   }, [step]);
 
@@ -278,10 +311,16 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
     }
   };
 
-  const handleConnectLocal = async () => {
+  const handleEnter = async () => {
     const granted = await photoService.requestPermissions();
     if (granted) {
       setStep('indexing');
+    } else {
+      Alert.alert(
+        'Permission Required',
+        'MRAE needs access to your photos to build your visual memory. Please allow access in settings.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -293,9 +332,14 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
   if (step === 'welcome') {
     return (
         <View style={styles.content}>
-          <Animated.Text entering={FadeInDown.duration(1000).springify()} style={styles.title}>
-            MRAE
-          </Animated.Text>
+          <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.titleContainer}>
+            <Text style={styles.title}>M R A E</Text>
+            <Image 
+              source={require('../../assets/mrae.png')} 
+              style={styles.titleLogo}
+              resizeMode="contain"
+            />
+          </Animated.View>
           <Animated.Text entering={FadeInDown.delay(300).duration(1000).springify()} style={styles.subtitle}>
             Your external memory,{'\n'}reimagined.
           </Animated.Text>
@@ -303,37 +347,11 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
           <View style={styles.spacer} />
 
           <Animated.View entering={FadeInDown.delay(600).duration(1000)}>
-            <TouchableOpacity style={styles.minimalButton} onPress={() => setStep('connect')}>
+            <TouchableOpacity style={styles.minimalButton} onPress={handleEnter}>
               <Text style={styles.minimalButtonText}>Enter</Text>
               <Ionicons name="arrow-forward" size={16} color={colors.warm.accent} />
           </TouchableOpacity>
         </Animated.View>
-      </View>
-    );
-  }
-
-  if (step === 'connect') {
-    return (
-        <View style={styles.content}>
-          <Animated.Text entering={FadeInDown.duration(800)} style={styles.sectionTitle}>
-            Connect
-          </Animated.Text>
-          <Animated.Text entering={FadeInDown.delay(200).duration(800)} style={styles.sectionSubtitle}>
-            Link your visual history to begin.
-          </Animated.Text>
-
-        <View style={styles.optionsContainer}>
-            <TouchableOpacity style={styles.minimalOptionCard} onPress={handleConnectLocal}>
-              <View style={styles.optionIconCircle}>
-                <Ionicons name="images-outline" size={24} color={colors.warm.accent} />
-              </View>
-            <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Photos</Text>
-                <Text style={styles.optionDesc}>Local Gallery</Text>
-            </View>
-              <Ionicons name="add" size={24} color={colors.text.tertiary} />
-          </TouchableOpacity>
-        </View>
       </View>
     );
   }
@@ -344,15 +362,35 @@ export default function NeuralOnboarding({ onComplete }: OnboardingProps) {
         
         <View style={styles.statsContainer}>
           <Animated.View 
+            entering={FadeInDown.duration(400).springify()} 
+            style={styles.indexingTitleContainer}
+          >
+            <Text style={styles.indexingTitle}>M R A E</Text>
+            <Image 
+              source={require('../../assets/mrae.png')} 
+              style={styles.indexingLogo}
+              resizeMode="contain"
+            />
+          </Animated.View>
+          
+          <Animated.View 
             style={styles.percentageContainer}
             key={`percentage-${Math.round(progressPercentage * 100)}`}
-            entering={FadeInDown.duration(400).springify()}
+            entering={FadeInDown.delay(200).duration(400).springify()}
           >
             <Text style={styles.percentageNumber}>
               {Math.round(progressPercentage * 100)}
             </Text>
             <Text style={styles.percentageSymbol}>%</Text>
           </Animated.View>
+          
+          <Animated.Text 
+            entering={FadeInDown.delay(100).duration(500)}
+            style={styles.rotatingPhrase}
+            key={currentPhraseIndex}
+          >
+            {INDEXING_PHRASES[currentPhraseIndex]}
+          </Animated.Text>
           
           <Text style={styles.statLabel}>
             {indexingStats.total > 0 
@@ -409,12 +447,22 @@ const styles = StyleSheet.create({
   spacer: {
     height: spacing.xxl,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.m,
+    marginBottom: spacing.m,
+  },
   title: {
     fontSize: 32,
     fontWeight: '300',
     color: colors.text.primary,
     letterSpacing: 8,
-    marginBottom: spacing.m,
+  },
+  titleLogo: {
+    width: 48,
+    height: 48,
   },
   subtitle: {
     fontSize: 18,
@@ -526,8 +574,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 110, 64, 0.1)',
   },
   statsContainer: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: spacing.l,
+    paddingLeft: spacing.xl,
+    width: '100%',
   },
   percentageContainer: {
     flexDirection: 'row',
@@ -553,7 +603,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
     marginTop: spacing.s,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -581,5 +631,32 @@ const styles = StyleSheet.create({
     color: colors.warm.accent,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  indexingTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: spacing.m,
+    marginBottom: spacing.l,
+    alignSelf: 'flex-start',
+    paddingLeft: spacing.xl,
+  },
+  indexingTitle: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: colors.text.primary,
+    letterSpacing: 6,
+  },
+  indexingLogo: {
+    width: 40,
+    height: 40,
+  },
+  rotatingPhrase: {
+    fontSize: 16,
+    color: colors.text.secondary,
+    textAlign: 'left',
+    marginTop: spacing.m,
+    fontStyle: 'italic',
+    minHeight: 24,
   },
 });

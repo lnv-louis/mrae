@@ -64,13 +64,44 @@ class OnnxService {
     try {
       console.log('🔧 Loading SigLIP-2 text encoder...');
       
-      // Try to load ONNX Runtime
+      // Try to load ONNX Runtime - use dynamic import to prevent module load errors
       let ORT: any;
       try {
-        ORT = require('onnxruntime-react-native');
+        // Use a function to safely require the module
+        const loadOnnxModule = () => {
+          try {
+            return require('onnxruntime-react-native');
+          } catch (e: any) {
+            // Suppress the "install" error that happens at module load
+            if (e?.message?.includes('install') || e?.message?.includes('null')) {
+              return null;
+            }
+            throw e;
+          }
+        };
+        
+        ORT = loadOnnxModule();
+        
+        // Check if native module is properly initialized
+        if (!ORT || typeof ORT !== 'object') {
+          console.warn('⚠️ ONNX Runtime module not properly loaded');
+          return false;
+        }
+        
+        // Check if InferenceSession exists
+        if (!ORT.InferenceSession || typeof ORT.InferenceSession !== 'function') {
+          console.warn('⚠️ ONNX Runtime InferenceSession not available');
+          return false;
+        }
+        
         console.log('✅ ONNX Runtime loaded');
-      } catch (e) {
-        console.warn('⚠️ onnxruntime-react-native not available, using mock embeddings');
+      } catch (e: any) {
+        // Suppress the "install" error
+        if (e?.message?.includes('install') || e?.message?.includes('null')) {
+          console.warn('⚠️ ONNX Runtime native module not initialized (install error suppressed)');
+        } else {
+          console.warn('⚠️ onnxruntime-react-native not available:', e?.message || e);
+        }
         return false;
       }
 

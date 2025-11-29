@@ -29,7 +29,9 @@ export default function PhotoDetailScreen({ route, navigation }: any) {
   const [infoVisible, setInfoVisible] = useState(false);
   const [aiData, setAiData] = useState<{caption: string | null, city: string | null, time: string | null} | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
+  // Preload AI data immediately when screen opens
   useEffect(() => {
     loadAiDetails();
   }, []);
@@ -100,7 +102,15 @@ export default function PhotoDetailScreen({ route, navigation }: any) {
           source={{ uri }} 
           style={styles.image} 
           resizeMode="contain"
+          onLoadStart={() => setImageLoaded(false)}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageLoaded(true)}
         />
+        {!imageLoaded && (
+          <View style={styles.imagePlaceholder}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
       </ScrollView>
 
       {/* Header Actions */}
@@ -115,7 +125,16 @@ export default function PhotoDetailScreen({ route, navigation }: any) {
           <TouchableOpacity style={styles.iconButton} onPress={handleLike}>
             <Ionicons name="heart-outline" size={24} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton} onPress={() => setInfoVisible(!infoVisible)}>
+          <TouchableOpacity 
+            style={styles.iconButton} 
+            onPress={() => {
+              setInfoVisible(!infoVisible);
+              // If opening info and AI data not loaded yet, trigger load
+              if (!infoVisible && !aiData && !loadingAi) {
+                loadAiDetails();
+              }
+            }}
+          >
             <Ionicons name={infoVisible ? "information-circle" : "information-circle-outline"} size={24} color="white" />
           </TouchableOpacity>
         </View>
@@ -193,6 +212,12 @@ const styles = StyleSheet.create({
   image: {
     width: width,
     height: height,
+  },
+  imagePlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
   },
   header: {
     position: 'absolute',

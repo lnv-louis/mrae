@@ -13,7 +13,6 @@ import { BlurView } from 'expo-blur';
 import GalleryScreen from './src/screens/GalleryScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import CreativeScreen from './src/screens/CreativeScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
 import NeuralOnboarding from './src/screens/NeuralOnboarding';
 import PhotoDetailScreen from './src/screens/PhotoDetailScreen';
 import { colors, radius, spacing } from './src/theme';
@@ -78,8 +77,6 @@ function TabNavigator() {
                     iconName = focused ? 'compass' : 'compass-outline';
                   } else if (route.name === 'Creative') {
             iconName = focused ? 'sparkles' : 'sparkles-outline';
-                  } else if (route.name === 'Settings') {
-                    iconName = focused ? 'settings' : 'settings-outline';
                   } else {
                     iconName = 'help';
                   }
@@ -112,11 +109,6 @@ function TabNavigator() {
                 name="Creative" 
                 component={CreativeScreen}
         options={{ title: 'Create' }}
-              />
-              <Tab.Screen 
-                name="Settings" 
-                component={SettingsScreen}
-                options={{ title: 'Settings' }}
               />
           </Tab.Navigator>
   );
