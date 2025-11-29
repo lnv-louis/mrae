@@ -29,7 +29,7 @@ module.exports = () => {
 
   const extra = {
     ...(app.expo.extra || {}),
-    openrouterApiKey: process.env.OPENROUTER_API_KEY || null,
+    geminiApiKey: process.env.GEMINI_API_KEY || null,
   };
 
   return {
@@ -39,4 +39,3 @@ module.exports = () => {
     },
   };
 };
-
