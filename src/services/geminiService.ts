@@ -16,6 +16,10 @@ class GeminiService {
     this.apiKey = key;
   }
 
+  hasApiKey(): boolean {
+    return !!this.apiKey;
+  }
+
   private transformMessages(messages: Array<{ role: 'user' | 'assistant' | 'system'; content: any }>): GeminiContent[] {
     return messages.map((m) => {
       const parts: GeminiPart[] = [];
@@ -25,7 +29,13 @@ class GeminiService {
         for (const c of m.content) {
           if (c.type === 'text' && c.text) parts.push({ text: c.text });
           if (c.type === 'image_url' && c.image_url?.url) {
-            parts.push({ inline_data: { mime_type: 'image/jpeg', data: c.image_url.url } });
+            const url: string = c.image_url.url;
+            let base64 = url;
+            if (typeof url === 'string' && url.startsWith('data:image/')) {
+              const commaIdx = url.indexOf(',');
+              base64 = commaIdx > -1 ? url.slice(commaIdx + 1) : url;
+            }
+            parts.push({ inline_data: { mime_type: 'image/jpeg', data: base64 } });
           }
           if (c.type === 'inline_data' && c.inline_data) parts.push({ inline_data: c.inline_data });
         }
@@ -69,7 +79,27 @@ class GeminiService {
       ],
     };
   }
+
+  async embedText(text: string, model: string = 'text-embedding-004'): Promise<number[] | null> {
+    if (!this.apiKey) return null;
+    try {
+      const url = `${GEMINI_API_BASE}/${model}:embedText`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify({ text }),
+      });
+      if (!response.ok) return null;
+      const data: import('../types').GeminiEmbeddingResponse = await response.json();
+      const values = data?.embedding?.values || [];
+      return values.length > 0 ? values : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export default new GeminiService();
-

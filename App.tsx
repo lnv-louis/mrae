@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -11,6 +11,7 @@ import GalleryScreen from './src/screens/GalleryScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import CreativeScreen from './src/screens/CreativeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import indexingService from './src/services/indexingService';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,6 +19,8 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
+        {/** kick off indexing on app launch */}
+        <AutoIndexOnLaunch />
         <Tab.Navigator
           screenOptions={({ route }) => ({
             headerShown: true,
@@ -84,4 +87,10 @@ export default function App() {
   );
 }
 
+function AutoIndexOnLaunch() {
+  useEffect(() => {
+    indexingService.ensureUpToDate();
+  }, []);
+  return null;
+}
 

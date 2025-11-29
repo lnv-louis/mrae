@@ -41,3 +41,7 @@ export interface GeminiContent {
 export interface GeminiGenerateResponse {
   candidates?: Array<{ content: { parts: GeminiPart[] } }>;
 }
+
+export interface GeminiEmbeddingResponse {
+  embedding?: { values: number[] };
+}

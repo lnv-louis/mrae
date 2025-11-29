@@ -13,6 +13,9 @@ class DatabaseService {
     // but we can explicitly enable it if needed, or run other setup.
     await this.db.execAsync('PRAGMA journal_mode=WAL');
     await this.db.execAsync('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)');
+    await this.initImageIndex();
+    await this.initImageLabels();
+    await this.initUserPreferences();
   }
 
   // Wrapper to maintain some compatibility with previous interface, 
@@ -53,6 +56,131 @@ class DatabaseService {
   async getAll(sql: string, params: any[] = []) {
     if (!this.db) await this.init();
     return this.db!.getAllAsync(sql, params);
+  }
+
+  async initImageIndex(): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.execAsync(`
+      CREATE TABLE IF NOT EXISTS image_index (
+        id TEXT PRIMARY KEY,
+        uri TEXT,
+        embedding BLOB,
+        latitude REAL,
+        longitude REAL,
+        city TEXT,
+        timestamp INTEGER
+      )
+    `);
+    await this.db!.execAsync('CREATE INDEX IF NOT EXISTS idx_image_time ON image_index(timestamp)');
+    await this.db!.execAsync('CREATE INDEX IF NOT EXISTS idx_image_city ON image_index(city)');
+  }
+
+  async initImageLabels(): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.execAsync(`
+      CREATE TABLE IF NOT EXISTS image_labels (
+        image_id TEXT,
+        label TEXT,
+        score REAL,
+        PRIMARY KEY(image_id, label)
+      )
+    `);
+    await this.db!.execAsync('CREATE INDEX IF NOT EXISTS idx_labels_label ON image_labels(label)');
+    await this.db!.execAsync('CREATE INDEX IF NOT EXISTS idx_labels_image ON image_labels(image_id)');
+  }
+
+  async initUserPreferences(): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.execAsync(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        image_id TEXT NOT NULL,
+        feedback_tag TEXT NOT NULL,
+        embedding_vector BLOB NOT NULL,
+        UNIQUE(image_id, feedback_tag)
+      )
+    `);
+    await this.db!.execAsync('CREATE INDEX IF NOT EXISTS idx_user_pref_tag ON user_preferences(feedback_tag)');
+    await this.db!.execAsync('CREATE INDEX IF NOT EXISTS idx_user_pref_image ON user_preferences(image_id)');
+  }
+
+  async getImageIndexIds(): Promise<string[]> {
+    if (!this.db) await this.init();
+    const rows = await this.db!.getAllAsync('SELECT id FROM image_index');
+    return rows.map((r: any) => r.id);
+  }
+
+  async beginTransaction(): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.execAsync('BEGIN TRANSACTION');
+  }
+
+  async commitTransaction(): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.execAsync('COMMIT');
+  }
+
+  async rollbackTransaction(): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.execAsync('ROLLBACK');
+  }
+
+  async insertImageIndex(entry: {
+    id: string;
+    uri: string;
+    embedding: Uint8Array;
+    latitude: number | null;
+    longitude: number | null;
+    city: string | null;
+    timestamp: number;
+  }): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.runAsync(
+      `INSERT OR REPLACE INTO image_index (id, uri, embedding, latitude, longitude, city, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.id,
+        entry.uri,
+        entry.embedding,
+        entry.latitude,
+        entry.longitude,
+        entry.city,
+        entry.timestamp,
+      ]
+    );
+  }
+
+  async insertImageLabel(item: { image_id: string; label: string; score: number }): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.runAsync(
+      `INSERT OR REPLACE INTO image_labels (image_id, label, score) VALUES (?, ?, ?)`,
+      [item.image_id, item.label, item.score]
+    );
+  }
+
+  async clearLabelsByLabel(label: string): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.runAsync(`DELETE FROM image_labels WHERE label = ?`, [label]);
+  }
+
+  async insertUserPreference(pref: { image_id: string; feedback_tag: string; embedding_vector: Uint8Array }): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.runAsync(
+      `INSERT OR REPLACE INTO user_preferences (image_id, feedback_tag, embedding_vector) VALUES (?, ?, ?)`,
+      [pref.image_id, pref.feedback_tag, pref.embedding_vector]
+    );
+  }
+
+  async getPreferenceEmbeddingsByTag(tag: string): Promise<Float32Array[]> {
+    if (!this.db) await this.init();
+    const rows = await this.getAll('SELECT embedding_vector FROM user_preferences WHERE feedback_tag = ?', [tag]);
+    return rows.map((r: any) => {
+      const buf = r.embedding_vector;
+      if (buf instanceof Uint8Array) return new Float32Array(buf.buffer);
+      if (Array.isArray(buf)) return new Float32Array(buf);
+      if (buf?.buffer && typeof buf.length === 'number') return new Float32Array(buf.buffer);
+      return new Float32Array(0);
+    });
   }
 }
 
