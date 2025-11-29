@@ -1,4 +1,4 @@
-import { CactusLM, type CactusLMEmbedResult, type CactusLMImageEmbedParams, type CactusLMImageEmbedResult } from 'cactus-react-native';
+import { CactusLM, type CactusLMEmbedResult } from 'cactus-react-native';
 import { EmbeddingResult } from '../types';
 
 class EmbeddingService {
@@ -103,25 +103,11 @@ class EmbeddingService {
     }
 
     try {
-      // Try embedImage method (check Cactus SDK docs for exact API)
-      // Based on documentation, this should work for vision models
-      if (typeof (this.imageModel as any).embedImage === 'function') {
-        const result: CactusLMImageEmbedResult = await (this.imageModel as any).embedImage({ 
-          imagePath 
-        });
-        return {
-          embedding: result.embedding,
-          success: true,
-        };
-      } else {
-        // Fallback: If embedImage doesn't exist, we'll need to use a different approach
-        // For now, return error - this needs to be verified with actual Cactus SDK
-        console.warn('embedImage method not found on CactusLM. Please verify Cactus SDK API.');
-        return {
-          embedding: [],
-          success: false,
-        };
-      }
+      const result = await this.imageModel!.imageEmbed({ imagePath });
+      return {
+        embedding: result.embedding,
+        success: true,
+      };
     } catch (error) {
       console.error('Error generating image embedding:', error);
       return {
@@ -175,4 +161,3 @@ class EmbeddingService {
 }
 
 export default new EmbeddingService();
-
