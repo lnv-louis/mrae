@@ -377,6 +377,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing.xxl * 2,
     paddingHorizontal: spacing.xl,
+    zIndex: 1001, // Above cards (which have zIndex: 100) and header (zIndex: 1000)
   },
   buttonGroup: {
     alignItems: 'center',

@@ -79,32 +79,32 @@ class ImageEditingService {
     }
 
     try {
-      // Resize image to prevent token overflow (OpenRouter has 65k token limit)
-      // Large images can easily exceed this, so we resize to max 1024x1024
+      // Resize image for optimal API processing (OpenRouter/Gemini can handle up to 4k)
+      // We resize to 2048px max to balance quality and processing speed
       let processedImageUri = imageUri;
 
       try {
-        console.log('📐 Resizing image to prevent API token overflow...');
+        console.log('📐 Optimizing image for API...');
 
         const manipResult = await ImageManipulator.manipulateAsync(
           imageUri,
           [
             {
               resize: {
-                width: 384, // Aggressive resize to stay under 65k token limit (512px was still too large)
+                width: 2048, // High quality for vision models (supports up to 4k)
               }
             }
           ],
           {
-            compress: 0.4, // Aggressive compression for token budget
+            compress: 0.85, // High quality compression
             format: ImageManipulator.SaveFormat.JPEG,
           }
         );
 
         processedImageUri = manipResult.uri;
-        console.log('✅ Image resized for API compatibility');
+        console.log('✅ Image optimized');
       } catch (resizeError: any) {
-        console.warn('⚠️ Image resize failed, using original (may cause token overflow):', resizeError);
+        console.warn('⚠️ Image optimization failed, using original:', resizeError);
       }
 
       // Convert image URI to base64
@@ -137,12 +137,7 @@ class ImageEditingService {
           imageData = base64;
 
           // Log size for debugging
-          const estimatedTokens = Math.ceil(base64.length / 4);
-          console.log(`📊 Image size: ~${(base64.length / 1024).toFixed(1)}KB base64, ~${estimatedTokens.toLocaleString()} tokens`);
-
-          if (estimatedTokens > 50000) {
-            console.warn('⚠️ WARNING: Image still very large after resize, may exceed API limits');
-          }
+          console.log(`📊 Image size: ~${(base64.length / 1024).toFixed(1)}KB base64`);
         } catch (fileError: any) {
           console.error('❌ File read error:', fileError);
           return {
@@ -166,13 +161,18 @@ class ImageEditingService {
         console.log(`📍 Region: ${region.width}x${region.height} at (${region.x}, ${region.y})`);
       }
 
-      // Use AI to understand the image and generate editing instructions
+      // Use OpenRouter's OpenAI-compatible format for images
       const messages = [
         {
           role: 'user',
           content: [
             { type: 'text', text: fullPrompt },
-            { type: 'inline_data', inline_data: { mime_type: imageFormat, data: imageData } }
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${imageFormat};base64,${imageData}`
+              }
+            }
           ]
         }
       ];

@@ -75,9 +75,10 @@ class GeminiService {
 
       // OpenRouter uses OpenAI-compatible format
       const url = `${OPENROUTER_API_BASE}/chat/completions`;
+      // Pass content directly (array or string) - do NOT stringify arrays
       const openAIMessages = augmented.map(m => ({
         role: m.role,
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+        content: m.content // Pass as-is (OpenRouter handles arrays natively)
       }));
 
       const response = await fetch(url, {
@@ -123,7 +124,12 @@ class GeminiService {
       role: 'user',
       content: [
         { type: 'text', text },
-        { type: 'inline_data', inline_data: { mime_type: 'image/jpeg', data: imageDataBase64 } },
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:image/jpeg;base64,${imageDataBase64}`
+          }
+        },
       ],
     };
   }

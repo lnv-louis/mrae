@@ -35,6 +35,7 @@
     "expo-media-library": "~18.2.0",
     "expo-sqlite": "~16.0.9",
     "expo-status-bar": "~3.0.8",
+    "expo-updates": "~29.0.13",
     "expo-web-browser": "^15.0.9",
     "lucide-react-native": "^0.555.0",
     "onnxruntime-react-native": "^1.23.2",
